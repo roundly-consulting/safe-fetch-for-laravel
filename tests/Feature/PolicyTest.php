@@ -278,3 +278,60 @@ it('shapes a redirect policy', function (): void {
         ->and((new RedirectPolicy)->enabled()->statusesGiven)->toBeFalse()
         ->and((new RedirectPolicy)->withStatuses([303])->statuses)->toBe([303]);
 });
+
+it('builds a method preserving policy that forwards headers in one call', function (): void {
+    $policy = RedirectPolicy::methodPreserving(4, forwardHeaders: ['Webhook-Id', 'webhook-timestamp', 'Webhook-Signature']);
+
+    expect($policy->enabled)->toBeTrue()
+        ->and($policy->max)->toBe(4)
+        ->and($policy->statuses)->toBe([307, 308])
+        ->and($policy->statusesGiven)->toBeTrue()
+        ->and($policy->allowDowngrade)->toBeFalse()
+        ->and($policy->forwardHeaders)->toBe(['webhook-id', 'webhook-timestamp', 'webhook-signature'])
+        ->and(RedirectPolicy::methodPreserving()->forwardHeaders)->toBe([]);
+});
+
+it('replaces forward headers and keeps every other redirect setting', function (): void {
+    $base = new RedirectPolicy(enabled: true, max: 5, statuses: [301, 308], allowDowngrade: true, forwardHeaders: ['x-old']);
+    $policy = $base->forwardHeaders(['X-New', 'x-other']);
+
+    expect($policy->forwardHeaders)->toBe(['x-new', 'x-other'])
+        ->and($policy->enabled)->toBeTrue()
+        ->and($policy->max)->toBe(5)
+        ->and($policy->statuses)->toBe([301, 308])
+        ->and($policy->statusesGiven)->toBeTrue()
+        ->and($policy->allowDowngrade)->toBeTrue()
+        ->and($base->forwardHeaders)->toBe(['x-old'])
+        ->and($policy->forwardHeaders([])->forwardHeaders)->toBe([])
+        ->and((new RedirectPolicy)->forwardHeaders(['x-a'])->statusesGiven)->toBeFalse();
+});
+
+it('allows a downgrade only when asked', function (): void {
+    $policy = RedirectPolicy::methodPreserving(2, forwardHeaders: ['x-sig']);
+
+    expect($policy->allowDowngrade)->toBeFalse()
+        ->and($policy->allowingDowngrade()->allowDowngrade)->toBeTrue()
+        ->and($policy->allowingDowngrade()->allowingDowngrade(false)->allowDowngrade)->toBeFalse()
+        ->and($policy->allowingDowngrade()->max)->toBe(2)
+        ->and($policy->allowingDowngrade()->forwardHeaders)->toBe(['x-sig'])
+        ->and($policy->allowingDowngrade()->statuses)->toBe([307, 308]);
+});
+
+it('validates a forwarded header name in the wither', function (): void {
+    expect(fn () => RedirectPolicy::methodPreserving()->forwardHeaders(['bad header']))
+        ->toThrow(InvalidArgumentException::class, 'not a header name')
+        ->and(fn () => RedirectPolicy::methodPreserving(forwardHeaders: ['x:y']))
+        ->toThrow(InvalidArgumentException::class, 'not a header name');
+});
+
+it('limits max in the wither', function (): void {
+    $policy = RedirectPolicy::methodPreserving(forwardHeaders: ['x-sig'])->allowingDowngrade();
+
+    expect($policy->max(0)->max)->toBe(0)
+        ->and($policy->max(10)->max)->toBe(10)
+        ->and($policy->max(7)->forwardHeaders)->toBe(['x-sig'])
+        ->and($policy->max(7)->allowDowngrade)->toBeTrue()
+        ->and($policy->max(7)->enabled)->toBeTrue()
+        ->and(fn () => $policy->max(-1))->toThrow(InvalidArgumentException::class, 'between 0 and 10')
+        ->and(fn () => $policy->max(11))->toThrow(InvalidArgumentException::class, 'between 0 and 10');
+});

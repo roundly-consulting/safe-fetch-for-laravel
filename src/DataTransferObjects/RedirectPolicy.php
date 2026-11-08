@@ -54,10 +54,15 @@ final readonly class RedirectPolicy
         return new self;
     }
 
-    /** Follow 307 and 308 (method and body kept), at most `$max` hops. */
-    public static function methodPreserving(int $max = 3): self
+    /**
+     * Follow 307 and 308 (method and body kept), at most `$max` hops, also sending
+     * `$forwardHeaders` to another origin a redirect leads to (a webhook's signature headers).
+     *
+     * @param  list<string>  $forwardHeaders
+     */
+    public static function methodPreserving(int $max = 3, array $forwardHeaders = []): self
     {
-        return new self(enabled: true, max: $max, statuses: [307, 308]);
+        return new self(enabled: true, max: $max, statuses: [307, 308], forwardHeaders: $forwardHeaders);
     }
 
     /** The same policy, followed (`true`) or not, keeping every other setting. */
@@ -74,6 +79,35 @@ final readonly class RedirectPolicy
     public function withStatuses(array $statuses): self
     {
         return new self($this->enabled, $this->max, $statuses, $this->allowDowngrade, $this->forwardHeaders);
+    }
+
+    /**
+     * The same policy, sending exactly `$headers` to another origin a redirect leads to — it
+     * **replaces** the list. Credentials never go: name only headers that are safe to repeat.
+     *
+     * @param  list<string>  $headers
+     *
+     * @throws InvalidArgumentException for an entry that is not a header name
+     */
+    public function forwardHeaders(array $headers): self
+    {
+        return new self($this->enabled, $this->max, $this->statusesGiven ? $this->statuses : null, $this->allowDowngrade, $headers);
+    }
+
+    /** The same policy, following a redirect from https to http (`true`) or not. */
+    public function allowingDowngrade(bool $allow = true): self
+    {
+        return new self($this->enabled, $this->max, $this->statusesGiven ? $this->statuses : null, $allow, $this->forwardHeaders);
+    }
+
+    /**
+     * The same policy, following at most `$max` hops (0–10).
+     *
+     * @throws InvalidArgumentException for a max outside 0–10
+     */
+    public function max(int $max): self
+    {
+        return new self($this->enabled, $max, $this->statusesGiven ? $this->statuses : null, $this->allowDowngrade, $this->forwardHeaders);
     }
 
     /** Whether a `$status` answer (with a `Location`) is followed. */

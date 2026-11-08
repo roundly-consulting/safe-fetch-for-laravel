@@ -26,6 +26,9 @@ Initial public release.
   a body and marks it `Safe-Fetch-Truncated: 1`.
 - Redirects, off by default: 307/308 at most three hops when on, every hop vetted and pinned
   again, no https to http, headers and credentials kept to the first origin, one time budget.
+  `RedirectPolicy::methodPreserving($max, forwardHeaders: [...])` builds a followed policy that
+  also sends named headers (a webhook signature) to another origin in one call; the
+  `forwardHeaders()`, `allowingDowngrade()` and `max()` withers change one setting each.
 - `SafeFetch::fetch()`: a GET into memory with a byte cap (decoded bytes, so a compressed bomb
   stops too) and failures that say whether a retry can help (`retryable()`, `retryAfter()`).
 - `SafeFetch::vet()` / `allows()`, `SafeFetch::networks()`, `SafeFetch::urls()`.
