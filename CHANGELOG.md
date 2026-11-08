@@ -22,14 +22,15 @@ Initial public release.
   `*.localhost` by name. Shared with the Node twin through one contract fixture.
 - A policy (`DestinationPolicy`, `config/safe-fetch.php`): https only by default, ports, a strict
   host allowlist (`allowHosts()` replaces it and refuses an empty list, so a list that happens to
-  be empty never opens the guard), blocked hosts, the app's own hosts, private-host exemptions
-  (still resolved and pinned, and never for a cloud-metadata address — only an allowed range
-  names one back in), allowed and blocked address ranges, and a response cap (`maxResponseBytes`) that cuts
-  a body and marks it `Safe-Fetch-Truncated: 1` (`SafeFetch::truncated($response)` reads it,
-  `SafeFetchManager::TRUNCATED_HEADER` names it). `blockAppHosts()` switches the app-host block
-  on or off over whatever the configuration says. `withoutHostAllowlist()`,
-  `withoutPrivateHosts()` and `withoutAllowedRanges()` drop the host's carve-outs while keeping
-  its blocks — the start of a policy for another package's untrusted URLs.
+  be empty never opens the guard), blocked hosts, the app's own hosts (`blockAppHosts()` turns the
+  block on or off over the configuration), private-host exemptions (still resolved and pinned,
+  never for a cloud-metadata address — only an allowed range names one back in), allowed and
+  blocked address ranges. `withoutHostAllowlist()`, `withoutPrivateHosts()` and
+  `withoutAllowedRanges()` drop the host's carve-outs while keeping its blocks — the start of a
+  policy for another package's untrusted URLs.
+- A response cap for guarded requests (`maxResponseBytes`) that cuts a body and marks it
+  `Safe-Fetch-Truncated: 1`; `SafeFetch::truncated($response)` reads the mark
+  (`SafeFetchManager::TRUNCATED_HEADER` names it).
 - Redirects, off by default: 307/308 at most three hops when on, every hop vetted and pinned
   again, no https to http, headers and credentials kept to the first origin, one time budget.
   `RedirectPolicy::methodPreserving($max, forwardHeaders: [...])` builds a followed policy that
@@ -46,14 +47,14 @@ Initial public release.
   hosts, the allowlist, `localhost`, an address literal in full) for save time and forms that
   should not wait on DNS; the URL is judged in full again when it is fetched.
 - The `SafeUrl` rule and the `safe_url` string rule (`safe_url:http` takes http too), with one
-  message whatever the reason;
-  `SafeUrl::withoutLookup()` validates through `precheck()`.
+  message whatever the reason; `SafeUrl::withoutLookup()` validates through `precheck()`.
 - `php artisan safe-fetch:check {url?}`: a URL's verdict, or a check of the environment; `--json`
   prints either as JSON for scripts and monitoring.
 - `DestinationRefused` event for every refusal (reason, host, rule, and `via` — `vet`, `allows`,
   `precheck`, `request`, `fetch` or `download` — so alerting can ignore form validation; never
   the URL).
 - `SafeFetch::fake()` and `SafeFetch::fakeDns()` for host tests, with assertions for what was
-  vetted, refused, fetched and sent (`assertNothingRefused()` among them).
+  vetted, refused, fetched, downloaded and sent (`assertNothingRefused()`, `assertDownloaded()`
+  among them).
 - English and Slovak messages that never name the URL or an address; `blocked` and `unresolved`
   read the same, so a message shown to whoever sent the URL cannot map the internal network.
