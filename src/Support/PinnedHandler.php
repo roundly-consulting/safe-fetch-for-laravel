@@ -9,9 +9,12 @@ use GuzzleHttp\Handler\CurlMultiHandler;
 use GuzzleHttp\Handler\Proxy;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Promise\PromiseInterface;
+use GuzzleHttp\Psr7\FnStream;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Contracts\Events\Dispatcher;
 use LogicException;
 use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\StreamInterface;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Events\DestinationRefused;
@@ -68,7 +71,28 @@ final class PinnedHandler
 
         $this->curl ??= Proxy::wrapSync(new CurlMultiHandler, new CurlHandler);
 
+        if (is_resource($options['sink'] ?? null)) {
+            $options['sink'] = self::keptOpen($options['sink']);
+        }
+
         return ($this->curl)($request, $options);
+    }
+
+    /**
+     * A sink resource as a stream that lets go of it rather than close it. Guzzle 7 closes the sink
+     * of a transfer it aborted — every redirect the guard follows — so the caller's own resource
+     * would reach the next hop closed. (Guzzle 8 wraps a resource sink this way itself; a stub of
+     * `Http::fake()` answers before this and writes to the resource as given.)
+     *
+     * @param  resource  $resource
+     */
+    private static function keptOpen(mixed $resource): StreamInterface
+    {
+        $stream = Utils::streamFor($resource);
+
+        return FnStream::decorate($stream, ['close' => static function () use ($stream): void {
+            $stream->detach();
+        }]);
     }
 
     /**

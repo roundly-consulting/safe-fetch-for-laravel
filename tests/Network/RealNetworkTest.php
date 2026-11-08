@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\RequestInterface;
 use RoundlyConsulting\SafeFetch\Contracts\HostResolver;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\RedirectPolicy;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
@@ -148,6 +149,18 @@ it('sends a cookie a real redirect set to the next hop', function (): void {
     expect($response->body())->toBe('cookie=session=abc')
         ->and($response->cookies()->getCookieByName('session')?->getDomain())->toBe('pin.invalid');
 });
+
+it('writes a followed answer into the callers own sink resource', function (int $status): void {
+    $sink = fopen('php://temp', 'w+b');
+
+    $response = Http::safe(networkPolicy()->redirects(RedirectPolicy::methodPreserving()->withStatuses([$status])))
+        ->withOptions(['sink' => $sink])
+        ->get($this->server->url('pin.invalid', "/redirect?status={$status}&to=/hello.txt&body=redirect"));
+
+    expect($response->status())->toBe(200)
+        ->and(is_resource($sink))->toBeTrue()
+        ->and(stream_get_contents($sink, offset: 0))->toBe('hello from the pinned server');
+})->with([307, 302]);
 
 it('streams through the pinned curl handler', function (): void {
     $response = Http::safe(networkPolicy())->withOptions(['stream' => true])->get($this->server->url('pin.invalid', '/big'));

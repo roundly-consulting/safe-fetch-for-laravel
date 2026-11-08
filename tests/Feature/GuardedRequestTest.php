@@ -302,6 +302,18 @@ it('sends no cookies when the request turns them off', function (): void {
     Http::assertSent(static fn (Request $request): bool => ! $request->hasHeader('Cookie'));
 });
 
+it('writes a stubbed followed answer into the callers sink resource', function (): void {
+    Http::fake([
+        'hooks.example/next' => Http::response('final'),
+        'hooks.example/*' => Http::response('', 307, ['Location' => '/next']),
+    ]);
+    $sink = fopen('php://temp', 'w+b');
+
+    Http::safe(SafeFetch::policy()->followRedirects())->withOptions(['sink' => $sink])->get('https://hooks.example/start');
+
+    expect(stream_get_contents($sink, offset: 0))->toBe('final');
+});
+
 it('keeps headers on the same origin', function (): void {
     Http::fake([
         'hooks.example/start' => Http::response('', 308, ['Location' => '/next']),
