@@ -56,6 +56,45 @@ final class AddressRanges
         return (int) explode('/', self::asRange($entry), 2)[1];
     }
 
+    /**
+     * How much of the IPv4 space a valid entry covers, as an IPv4 prefix length: an IPv4 entry its
+     * own prefix; an IPv6 one inside a prefix that carries IPv4 ({@see PrivateNetworks::IPV4_EMBEDDING})
+     * the prefix of the IPv4 addresses it carries (`::ffff:10.0.0.0/104` is `/8`); an IPv6 one that
+     * holds such a prefix whole 0 — every IPv4 address under another name. Null for an IPv6 entry
+     * that carries no IPv4 address.
+     */
+    public static function ipv4PrefixLength(string $entry): ?int
+    {
+        [$network, $prefix] = explode('/', self::asRange($entry), 2);
+        $prefix = (int) $prefix;
+
+        if (! self::isIpv6($entry)) {
+            return $prefix;
+        }
+
+        $bytes = (string) inet_pton($network);
+
+        foreach (PrivateNetworks::IPV4_EMBEDDING as $embedding) {
+            [$carrier, $carrierPrefix] = explode('/', $embedding['range'], 2);
+
+            if ($prefix <= (int) $carrierPrefix && self::bytesInRange((string) inet_pton($carrier), "{$network}/{$prefix}")) {
+                return 0;
+            }
+
+            if ($prefix > (int) $carrierPrefix && self::bytesInRange($bytes, $embedding['range'])) {
+                return min(32, $prefix - $embedding['offset'] * 8);
+            }
+        }
+
+        return null;
+    }
+
+    /** Whether a valid entry covers every IPv4 address — `0.0.0.0/0`, under any name. */
+    public static function coversEveryIpv4Address(string $entry): bool
+    {
+        return self::ipv4PrefixLength($entry) === 0;
+    }
+
     /** Whether the entry is an IPv6 one. */
     public static function isIpv6(string $entry): bool
     {

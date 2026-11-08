@@ -28,7 +28,8 @@ Initial public release.
   block on or off over the configuration), private-host exemptions (still resolved and pinned,
   never for a link-local or other cloud-metadata address — ECS and EKS credential endpoints
   included — only an allowed range names one back in), allowed and
-  blocked address ranges. `withoutHostAllowlist()`, `withoutPrivateHosts()` and
+  blocked address ranges (an allowed range covering every address — `0.0.0.0/0`, `::/0`, or an
+  IPv6 prefix carrying all of IPv4 such as `::ffff:0:0/96` or `2002::/16` — is refused). `withoutHostAllowlist()`, `withoutPrivateHosts()` and
   `withoutAllowedRanges()` drop the host's carve-outs while keeping its blocks — the start of a
   policy for another package's untrusted URLs.
 - A response cap for guarded requests (`maxResponseBytes`) that cuts a body and marks it

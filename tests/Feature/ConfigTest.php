@@ -101,6 +101,9 @@ it('refuses settings that switch the guard off', function (string $key, mixed $v
 })->with([
     'every ipv4 address' => ['ranges.allowed', ['0.0.0.0/0']],
     'every ipv6 address' => ['ranges.allowed', ['::/0']],
+    'every ipv4 address, mapped' => ['ranges.allowed', ['::ffff:0:0/96']],
+    'every ipv4 address, nat64' => ['ranges.allowed', ['64:ff9b::/96']],
+    'every ipv4 address, 6to4' => ['ranges.allowed', ['2002::/16']],
     'any host' => ['hosts.allowed', ['*']],
     'any private host' => ['hosts.private', ['*']],
 ]);

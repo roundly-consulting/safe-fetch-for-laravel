@@ -244,6 +244,15 @@ it('policies are immutable and validated', function (): void {
         ->and($loose->redirects(RedirectPolicy::none())->redirects->enabled)->toBeFalse();
 });
 
+it('allows a carried ipv4 range only as wide as it carries', function (): void {
+    $policy = SafeFetch::policy()->allowRanges(['::ffff:10.0.0.0/104', '64:ff9b::a00:0/104', 'fd00::/8']);
+
+    expect(SafeFetch::allows('https://[::ffff:10.1.2.3]/', $policy))->toBeTrue()
+        ->and(SafeFetch::allows('https://[64:ff9b::a01:203]/', $policy))->toBeTrue()
+        ->and(SafeFetch::allows('https://[::ffff:169.254.169.254]/', $policy))->toBeFalse()
+        ->and(SafeFetch::allows('https://[64:ff9b::7f00:1]/', $policy))->toBeFalse();
+});
+
 it('refuses a policy it could not apply as written', function (Closure $build, string $message): void {
     expect($build)->toThrow(InvalidArgumentException::class, $message);
 })->with([
@@ -259,6 +268,14 @@ it('refuses a policy it could not apply as written', function (Closure $build, s
     'range type' => [fn () => new DestinationPolicy(blockedRanges: [false]), 'not an address'],
     'everything v4' => [fn () => new DestinationPolicy(allowedRanges: ['0.0.0.0/0']), 'switch the guard off'],
     'everything v6' => [fn () => (new DestinationPolicy)->allowRanges(['::/0']), 'switch the guard off'],
+    // IPv6 forms that carry every IPv4 address are 0.0.0.0/0 under another name.
+    'every ipv4-mapped address' => [fn () => (new DestinationPolicy)->allowRanges(['::ffff:0:0/96']), 'switch the guard off'],
+    'every ipv4-compatible address' => [fn () => new DestinationPolicy(allowedRanges: ['::/96']), 'switch the guard off'],
+    'every nat64 address' => [fn () => (new DestinationPolicy)->allowRanges(['64:ff9b::/96']), 'switch the guard off'],
+    'every ipv4-translated address' => [fn () => (new DestinationPolicy)->allowRanges(['::ffff:0:0:0/96']), 'switch the guard off'],
+    'every 6to4 address' => [fn () => (new DestinationPolicy)->allowRanges(['2002::/16']), 'switch the guard off'],
+    'a prefix holding 6to4' => [fn () => (new DestinationPolicy)->allowRanges(['2000::/3']), 'switch the guard off'],
+    'a prefix holding the mapped space' => [fn () => (new DestinationPolicy)->allowRanges(['::/64']), 'switch the guard off'],
     'cap' => [fn () => (new DestinationPolicy)->maxResponseBytes(0), 'at least 1 byte'],
     'redirect max' => [fn () => new RedirectPolicy(max: 11), 'between 0 and 10'],
     'redirect statuses' => [fn () => new RedirectPolicy(statuses: [302, 304]), 'one of 301'],

@@ -56,13 +56,13 @@ it('check without a url reports the environment', function (): void {
 it('check warns about settings that weaken the guard', function (): void {
     app()->detectEnvironment(static fn (): string => 'production');
     config()->set('safe-fetch.allow_http', true);
-    config()->set('safe-fetch.ranges.allowed', ['10.0.0.0/7', 'fd00::/16']);
+    config()->set('safe-fetch.ranges.allowed', ['10.0.0.0/7', 'fd00::/16', '::ffff:0:0/100', '64:ff9b::/97', '::ffff:10.0.0.0/104']);
     config()->set('safe-fetch.redirects.enabled', true);
     config()->set('safe-fetch.redirects.allow_downgrade', true);
 
     $this->artisan('safe-fetch:check')
         ->expectsOutputToContain('http is allowed in production')
-        ->expectsOutputToContain('2 allowed range(s) are broader')
+        ->expectsOutputToContain('4 allowed range(s) are broader')
         ->expectsOutputToContain('drop from https to http')
         ->assertExitCode(0);
 });

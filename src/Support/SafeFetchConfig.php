@@ -98,8 +98,9 @@ final class SafeFetchConfig
     }
 
     /**
-     * `$ranges`, unless one of them is every address: everything allowed is no guard at all, so
-     * say so rather than run one that blocks nothing.
+     * `$ranges`, unless one of them is every address (or every IPv4 one, written as the IPv6 prefix
+     * that carries them): everything allowed is no guard at all, so say so rather than run one that
+     * blocks nothing.
      *
      * @param  list<string>  $ranges
      * @return list<string>
@@ -107,7 +108,7 @@ final class SafeFetchConfig
     private static function notEverything(string $key, array $ranges): array
     {
         foreach ($ranges as $range) {
-            if (AddressRanges::prefixLength($range) === 0) {
+            if (AddressRanges::prefixLength($range) === 0 || AddressRanges::coversEveryIpv4Address($range)) {
                 throw InvalidConfigurationException::notAValidListItem($key, $range);
             }
         }

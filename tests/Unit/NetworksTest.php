@@ -97,6 +97,30 @@ it('validates and matches address ranges', function (): void {
         ->and(AddressRanges::bytesInRange((string) inet_pton('10.0.0.1'), 'nonsense/8'))->toBeFalse();
 });
 
+it('measures how much of the ipv4 space a range covers', function (string $range, ?int $ipv4Prefix): void {
+    expect(AddressRanges::ipv4PrefixLength($range))->toBe($ipv4Prefix)
+        ->and(AddressRanges::coversEveryIpv4Address($range))->toBe($ipv4Prefix === 0);
+})->with([
+    'ipv4' => ['10.0.0.0/8', 8],
+    'ipv4 address' => ['10.0.0.1', 32],
+    'every ipv4' => ['0.0.0.0/0', 0],
+    'every address' => ['::/0', 0],
+    'mapped, whole' => ['::ffff:0:0/96', 0],
+    'mapped, a /8' => ['::ffff:10.0.0.0/104', 8],
+    'mapped address' => ['::ffff:10.0.0.1', 32],
+    'compatible, whole' => ['::/96', 0],
+    'nat64, whole' => ['64:ff9b::/96', 0],
+    'nat64, a /1' => ['64:ff9b::/97', 1],
+    'translated, whole' => ['::ffff:0:0:0/96', 0],
+    '6to4, whole' => ['2002::/16', 0],
+    '6to4, a /8' => ['2002:a00::/24', 8],
+    '6to4, one site' => ['2002:a00:1::/48', 32],
+    'holding 6to4' => ['2000::/3', 0],
+    'holding the mapped space' => ['::/80', 0],
+    'unique local' => ['fd00::/8', null],
+    'global unicast' => ['2606:4700::/32', null],
+]);
+
 it('treats a mapped address as its ipv4', function (): void {
     expect(AddressRanges::same('::ffff:127.0.0.1', '127.0.0.1'))->toBeTrue()
         ->and(AddressRanges::same('127.0.0.1', '::FFFF:7f00:1'))->toBeTrue()

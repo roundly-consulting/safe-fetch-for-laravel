@@ -167,7 +167,8 @@ final class CheckCommand extends Command
 
         $broad = array_filter(
             $policy->allowedRanges,
-            static fn (string $range): bool => AddressRanges::prefixLength($range) < (AddressRanges::isIpv6($range) ? 32 : 8),
+            static fn (string $range): bool => (AddressRanges::ipv4PrefixLength($range) ?? 8) < 8
+                || (AddressRanges::isIpv6($range) && AddressRanges::prefixLength($range) < 32),
         );
 
         if ($broad !== []) {

@@ -365,7 +365,8 @@ final readonly class DestinationPolicy
 
             $range = trim($range);
 
-            if ($allowed && AddressRanges::prefixLength($range) === 0) {
+            // Every address — or every IPv4 one, written as the IPv6 prefix that carries them.
+            if ($allowed && (AddressRanges::prefixLength($range) === 0 || AddressRanges::coversEveryIpv4Address($range))) {
                 throw new InvalidArgumentException("[{$range}] would allow every address and switch the guard off; do not guard the request instead.");
             }
 
