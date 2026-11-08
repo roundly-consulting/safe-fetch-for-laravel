@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Orchestra\Testbench\Foundation\Config;
-use RoundlyConsulting\PackageTemplate\PackageTemplateServiceProvider;
+use RoundlyConsulting\SafeFetch\SafeFetchServiceProvider;
 
 /**
  * Larastan boots its app from `testbench.yaml(.dist)` with exactly this call. On a fresh CI
@@ -15,5 +15,5 @@ use RoundlyConsulting\PackageTemplate\PackageTemplateServiceProvider;
 it('registers the package provider in the app Larastan boots', function (): void {
     $config = Config::loadFromYaml(dirname(__DIR__, 2));
 
-    expect($config->getExtraAttributes()['providers'])->toBe([PackageTemplateServiceProvider::class]);
+    expect($config->getExtraAttributes()['providers'])->toBe([SafeFetchServiceProvider::class]);
 });

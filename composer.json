@@ -1,11 +1,16 @@
 {
-    "name": "roundly-consulting/package-template-for-laravel",
-    "description": "TODO: replace with a one-line description of the new package.",
+    "name": "roundly-consulting/safe-fetch-for-laravel",
+    "description": "SSRF protection for Laravel's HTTP client: strict URL canonicalising, private and cloud-metadata address blocking, DNS pinning, re-vetted redirects and a validation rule.",
     "keywords": [
-        "roundly-consulting",
-        "laravel"
+        "ssrf",
+        "security",
+        "url-validation",
+        "dns-pinning",
+        "http-client",
+        "private-network",
+        "outbound-requests"
     ],
-    "homepage": "https://roundly-consulting.com/open-source/docs/package-template-for-laravel",
+    "homepage": "https://roundly-consulting.com/open-source/docs/safe-fetch-for-laravel",
     "license": "MIT",
     "authors": [
         {
@@ -15,11 +20,17 @@
         }
     ],
     "support": {
-        "docs": "https://roundly-consulting.com/open-source/docs/package-template-for-laravel"
+        "docs": "https://roundly-consulting.com/open-source/docs/safe-fetch-for-laravel"
     },
     "require": {
         "php": "^8.4",
+        "illuminate/console": "^13.0",
         "illuminate/contracts": "^13.0",
+        "illuminate/http": "^13.0",
+        "illuminate/support": "^13.0",
+        "illuminate/translation": "^13.0",
+        "illuminate/validation": "^13.0",
+        "roundly-consulting/enums-for-laravel": "^2.0",
         "roundly-consulting/package-toolkit-for-laravel": "^2.0"
     },
     "require-dev": {
@@ -33,14 +44,18 @@
         "phpstan/extension-installer": "^1.4",
         "roundly-consulting/testing-for-laravel": "^2.0"
     },
+    "suggest": {
+        "ext-curl": "Required to send guarded requests: DNS pinning uses CURLOPT_RESOLVE. Without it vet() still judges URLs, but Http::safe() and fetch() refuse with cannot_pin.",
+        "ext-intl": "International (IDN) host names; without it they are refused."
+    },
     "autoload": {
         "psr-4": {
-            "RoundlyConsulting\\PackageTemplate\\": "src"
+            "RoundlyConsulting\\SafeFetch\\": "src"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "RoundlyConsulting\\PackageTemplate\\Tests\\": "tests"
+            "RoundlyConsulting\\SafeFetch\\Tests\\": "tests"
         }
     },
     "scripts": {
@@ -48,7 +63,7 @@
         "format": "vendor/bin/pint",
         "analyse": "vendor/bin/phpstan analyse --no-progress",
         "test": "vendor/bin/pest",
-        "test-coverage": "vendor/bin/pest --coverage --min=90"
+        "test-coverage": "vendor/bin/pest --coverage --min=95"
     },
     "config": {
         "sort-packages": true,
@@ -60,10 +75,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "RoundlyConsulting\\PackageTemplate\\PackageTemplateServiceProvider"
+                "RoundlyConsulting\\SafeFetch\\SafeFetchServiceProvider"
             ],
             "aliases": {
-                "PackageTemplate": "RoundlyConsulting\\PackageTemplate\\Facades\\PackageTemplate"
+                "SafeFetch": "RoundlyConsulting\\SafeFetch\\Facades\\SafeFetch"
             }
         }
     }

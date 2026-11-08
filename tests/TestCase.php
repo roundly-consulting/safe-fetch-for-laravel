@@ -2,29 +2,27 @@
 
 declare(strict_types=1);
 
-namespace RoundlyConsulting\PackageTemplate\Tests;
+namespace RoundlyConsulting\SafeFetch\Tests;
 
 use Illuminate\Support\ServiceProvider;
-use RoundlyConsulting\PackageTemplate\PackageTemplateServiceProvider;
+use RoundlyConsulting\SafeFetch\SafeFetchServiceProvider;
+use RoundlyConsulting\SafeFetch\Support\CurlSupport;
 use RoundlyConsulting\Testing\PackageTestCase;
 
 abstract class TestCase extends PackageTestCase
 {
+    // No migrationSources(): the package has no database.
+
     /** @return list<class-string<ServiceProvider>> */
     protected function packageProviders(): array
     {
-        return [PackageTemplateServiceProvider::class];
+        return [SafeFetchServiceProvider::class];
     }
 
-    // No migrationSources() override — the base case defaults to []. Add one once the
-    // package ships migrations: return [PackageTemplateServiceProvider::class] (never a
-    // literal filename) once ->hasMigrations() is wired in the provider.
-    //
-    // With migrations, also keep the migrated schema (migrate once per worker, empty the
-    // tables after each test) — forked racers must then end with SIGKILL:
-    //
-    //     protected function keepsMigratedSchema(): bool
-    //     {
-    //         return true;
-    //     }
+    protected function tearDown(): void
+    {
+        CurlSupport::forget();
+
+        parent::tearDown();
+    }
 }
