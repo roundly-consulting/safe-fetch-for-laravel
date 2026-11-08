@@ -118,12 +118,20 @@ final readonly class DestinationPolicy
     }
 
     /**
-     * ONLY these hosts (exact or `*.example.com`) — replaces the allowlist, so it can only narrow.
+     * ONLY these hosts (exact or `*.example.com`). It **replaces** the allowlist — so it can widen
+     * a configured one — and is never empty: an empty list would allow every host, so lifting an
+     * allowlist is {@see self::withoutHostAllowlist()}, a call that says so.
      *
      * @param  list<string>  $hosts
+     *
+     * @throws InvalidArgumentException for an empty list
      */
     public function allowHosts(array $hosts): self
     {
+        if ($hosts === []) {
+            throw new InvalidArgumentException('An empty allowlist would allow every host; call withoutHostAllowlist() to lift it.');
+        }
+
         return $this->with(allowedHosts: $hosts);
     }
 

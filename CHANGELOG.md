@@ -21,7 +21,8 @@ Initial public release.
   NAT64, translated, 6to4) judged by the IPv4 it carries, Teredo blocked; `localhost` and
   `*.localhost` by name. Shared with the Node twin through one contract fixture.
 - A policy (`DestinationPolicy`, `config/safe-fetch.php`): https only by default, ports, a strict
-  host allowlist, blocked hosts, the app's own hosts, private-host exemptions (still resolved and
+  host allowlist (`allowHosts()` replaces it and refuses an empty list, so a list that happens to
+  be empty never opens the guard), blocked hosts, the app's own hosts, private-host exemptions (still resolved and
   pinned), allowed and blocked address ranges, and a response cap (`maxResponseBytes`) that cuts
   a body and marks it `Safe-Fetch-Truncated: 1`. `blockAppHosts()` switches the app-host block
   on or off over whatever the configuration says. `withoutHostAllowlist()`,

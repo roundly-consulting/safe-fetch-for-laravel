@@ -409,3 +409,23 @@ it('keeps inherited blocks when carve outs are cleared', function (): void {
         ->and(blockedBy(fn () => SafeFetch::vet('https://public.example/', $policy)))->toBe('blocked_range')
         ->and(blockedBy(fn () => SafeFetch::vet('https://myapp.test/', $policy)))->toBe('app_host');
 });
+
+it('refuses an empty allowlist instead of lifting it', function (): void {
+    config()->set('safe-fetch.hosts.allowed', ['media.example']);
+
+    expect(fn () => SafeFetch::policy()->allowHosts([]))
+        ->toThrow(InvalidArgumentException::class, 'An empty allowlist would allow every host; call withoutHostAllowlist() to lift it.')
+        ->and(fn () => (new DestinationPolicy)->allowHosts([]))
+        ->toThrow(InvalidArgumentException::class, 'withoutHostAllowlist()')
+        ->and(SafeFetch::policy()->allowedHosts)->toBe(['media.example']);
+});
+
+it('replaces the allowlist as documented', function (): void {
+    config()->set('safe-fetch.hosts.allowed', ['a.example']);
+    SafeFetch::fakeDns(['a.example' => '93.184.216.34', 'b.example' => '93.184.216.35']);
+    $policy = SafeFetch::policy()->allowHosts(['b.example']);
+
+    expect($policy->allowedHosts)->toBe(['b.example'])
+        ->and(SafeFetch::vet('https://b.example/', $policy)->host)->toBe('b.example')
+        ->and(Helpers::refusal(fn () => SafeFetch::vet('https://a.example/', $policy))->reason())->toBe(Reason::NotAllowed);
+});
