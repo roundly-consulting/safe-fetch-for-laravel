@@ -26,8 +26,8 @@ use RoundlyConsulting\SafeFetch\Http\GuardMiddleware;
  * pin), owned by the guard rather than the host, and the innermost code before the wire — so it
  * sees what middleware added after `safe()` and every `beforeSending()` callback did to the
  * request. Before handing a request to curl it checks that the request still goes to the vetted
- * scheme, host and port, that the pin is intact, no proxy is set and redirects are off; anything
- * else is refused with `cannot_pin` and nothing is dialled.
+ * scheme, host and port (its `Host` header too), that the pin is intact, no proxy is set and
+ * redirects are off; anything else is refused with `cannot_pin` and nothing is dialled.
  *
  * Under `Http::fake()` the stub answers first and this never runs.
  *
@@ -79,6 +79,29 @@ final class PinnedHandler
     }
 
     /**
+     * Whether the `Host` header — what a virtual host, CDN or ingress routes by, and what curl
+     * sends as HTTP/2's `:authority` — is absent or names the vetted host and port, once.
+     */
+    private static function hostHeaderIntact(RequestInterface $request, VettedDestination $hop): bool
+    {
+        $values = $request->getHeader('Host');
+
+        if ($values === []) {
+            return true;
+        }
+
+        if (count($values) !== 1 || preg_match('/^(\[[^\]]+\]|[^:\[\]]+)(?::(\d{1,5}))?$/', trim($values[0]), $match) !== 1) {
+            return false;
+        }
+
+        $host = strtolower(trim($match[1], '[]'));
+        $port = ($match[2] ?? '') === '' ? ($hop->scheme === 'https' ? 443 : 80) : (int) $match[2];
+        $sameHost = $hop->ipLiteral ? AddressRanges::same($host, $hop->host) : $host === $hop->host;
+
+        return $sameHost && $port === $hop->port;
+    }
+
+    /**
      * A sink resource as a stream that lets go of it rather than close it. Guzzle 7 closes the sink
      * of a transfer it aborted — every redirect the guard follows — so the caller's own resource
      * would reach the next hop closed. (Guzzle 8 wraps a resource sink this way itself; a stub of
@@ -108,7 +131,7 @@ final class PinnedHandler
         $port = $uri->getPort() ?? ($scheme === 'https' ? 443 : 80);
         $sameHost = $hop->ipLiteral ? AddressRanges::same($host, $hop->host) && AddressRanges::bytes($host) !== null : $host === $hop->host;
 
-        if ($scheme !== $hop->scheme || ! $sameHost || $port !== $hop->port) {
+        if ($scheme !== $hop->scheme || ! $sameHost || $port !== $hop->port || ! self::hostHeaderIntact($request, $hop)) {
             return false;
         }
 

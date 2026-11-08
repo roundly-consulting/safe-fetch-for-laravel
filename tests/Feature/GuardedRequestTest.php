@@ -677,6 +677,10 @@ it('refuses a request re pointed after vetting', function (Closure $tamper): voi
         return [$request, $options];
     }],
     'transport sharing' => [fn ($request, $options) => [$request, ['transport_sharing' => 'none'] + $options]],
+    'another host header' => [fn ($request, $options) => [$request->withHeader('Host', 'evil.internal'), $options]],
+    'another port in the host header' => [fn ($request, $options) => [$request->withHeader('Host', 'hooks.example:8443'), $options]],
+    'a second host header' => [fn ($request, $options) => [$request->withAddedHeader('Host', 'evil.internal'), $options]],
+    'a host header that is no authority' => [fn ($request, $options) => [$request->withHeader('Host', 'hooks.example:x'), $options]],
     'pre-send check of another hop' => [function ($request, $options) {
         if (! CurlSupport::preSendCheck()) {
             test()->markTestSkipped('needs CURLOPT_PREREQFUNCTION');
@@ -697,6 +701,36 @@ it('dials an intact request', function (): void {
     $options['safe_fetch.hop'] = $vetted;
 
     expect($handler(new PsrRequest('GET', 'https://[2606:4700:0::1111]/a'), $options)->wait()->getStatusCode())->toBe(204);
+});
+
+it('dials a request whose host header names the vetted authority', function (string $url, ?string $host): void {
+    $handler = new PinnedHandler(app(PinnedHandlers::class), app('events'));
+    (new ReflectionProperty(PinnedHandler::class, 'curl'))->setValue($handler, static fn () => Create::promiseFor(new PsrResponse(204)));
+    $vetted = SafeFetch::vet($url);
+    $options = $vetted->pinningOptions();
+    $options['curl'] = CurlSupport::preSendCheck() ? (new PreSendCheck($vetted))->attachTo($options['curl']) : $options['curl'];
+    $options['safe_fetch.hop'] = $vetted;
+    $request = new PsrRequest('GET', $url);
+    $request = $host === null ? $request->withoutHeader('Host') : $request->withHeader('Host', $host);
+
+    expect($handler($request, $options)->wait()->getStatusCode())->toBe(204);
+})->with([
+    'none' => ['https://hooks.example/a', null],
+    'another case' => ['https://hooks.example/a', 'HOOKS.Example'],
+    'the default port spelled out' => ['https://hooks.example/a', 'hooks.example:443'],
+    'another port' => ['https://hooks.example:8443/a', 'hooks.example:8443'],
+    'an ipv6 literal' => ['https://[2606:4700::1111]/a', '[2606:4700:0::1111]'],
+]);
+
+it('refuses a host header middleware set after safe', function (): void {
+    SafeFetch::fake();
+
+    $refusal = Helpers::thrown(fn () => Http::safe()
+        ->withRequestMiddleware(static fn (RequestInterface $request): RequestInterface => $request->withHeader('Host', 'evil.internal'))
+        ->get('https://hooks.example/'));
+
+    expect($refusal)->toBeInstanceOf(DestinationRejected::class)
+        ->and($refusal instanceof DestinationRejected ? $refusal->reason() : null)->toBe(Reason::CannotPin);
 });
 
 it('refuses to dial under the fake unless real requests are allowed', function (): void {

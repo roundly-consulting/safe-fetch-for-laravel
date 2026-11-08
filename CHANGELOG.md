@@ -13,7 +13,8 @@ Initial public release.
 - `Http::safe()`: any Laravel HTTP request, guarded — the URL rebuilt from a strict parse, every
   address its host resolves to judged, the connection pinned to those addresses through curl
   (`CURLOPT_RESOLVE`), no proxy, no reused connection, and the address curl connected to checked
-  before a byte is sent (libcurl 7.80+) and again afterwards. Works with `withToken()`, `retry()`,
+  before a byte is sent (libcurl 7.80+) and again afterwards; middleware added after `safe()`
+  cannot re-point the request, its pin or its `Host` header. Works with `withToken()`, `retry()`,
   `pool()` (guarded members stay concurrent) and other middleware. A Guzzle `handler` option, which
   on Guzzle 7 would replace the whole stack, is refused wherever it is set (`Http::globalOptions()`,
   `withOptions()` before or after `safe()`).
@@ -29,9 +30,9 @@ Initial public release.
   never for a link-local or other cloud-metadata address — ECS and EKS credential endpoints
   included — only an allowed range names one back in), allowed and
   blocked address ranges (an allowed range covering every address — `0.0.0.0/0`, `::/0`, or an
-  IPv6 prefix carrying all of IPv4 such as `::ffff:0:0/96` or `2002::/16` — is refused). `withoutHostAllowlist()`, `withoutPrivateHosts()` and
-  `withoutAllowedRanges()` drop the host's carve-outs while keeping its blocks — the start of a
-  policy for another package's untrusted URLs.
+  IPv6 prefix carrying all of IPv4 such as `::ffff:0:0/96` or `2002::/16` — is refused).
+  `withoutHostAllowlist()`, `withoutPrivateHosts()` and `withoutAllowedRanges()` drop the host's
+  carve-outs while keeping its blocks — the start of a policy for another package's untrusted URLs.
 - A response cap for guarded requests (`maxResponseBytes`) that cuts a body and marks it
   `Safe-Fetch-Truncated: 1`; `SafeFetch::truncated($response)` reads the mark
   (`SafeFetchManager::TRUNCATED_HEADER` names it).
