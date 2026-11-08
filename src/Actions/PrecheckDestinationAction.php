@@ -32,7 +32,7 @@ final readonly class PrecheckDestinationAction
         try {
             return $this->guard->precheck($url, $policy);
         } catch (DestinationRejected $exception) {
-            $this->events->dispatch(new DestinationRefused($exception->reason(), $exception->host(), $exception->blockedBy()));
+            $this->events->dispatch(new DestinationRefused($exception->reason(), $exception->host(), $exception->blockedBy(), 'precheck'));
 
             throw $exception;
         }

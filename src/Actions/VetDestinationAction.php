@@ -25,10 +25,12 @@ final readonly class VetDestinationAction
     ) {}
 
     /**
+     * @param  'vet'|'allows'|'request'|'fetch'|'download'  $via  where the URL is judged, for {@see DestinationRefused::$via}
+     *
      * @throws DestinationRejected
      * @throws DestinationUnavailable
      */
-    public function execute(string $url, DestinationPolicy $policy): VettedDestination
+    public function execute(string $url, DestinationPolicy $policy, string $via = 'vet'): VettedDestination
     {
         try {
             return $this->guard->vet($url, $policy);
@@ -37,6 +39,7 @@ final readonly class VetDestinationAction
                 $exception->reason(),
                 $exception->host(),
                 $exception instanceof DestinationRejected ? $exception->blockedBy() : null,
+                $via,
             ));
 
             throw $exception;

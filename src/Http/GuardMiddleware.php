@@ -110,6 +110,20 @@ final readonly class GuardMiddleware
     }
 
     /**
+     * Where the request was sent from, for {@see DestinationRefused::$via}: `fetch()` and
+     * `download()` say so in `safe_fetch.via`; anything else is a guarded `request`.
+     *
+     * @param  array<string, mixed>  $options
+     * @return 'request'|'fetch'|'download'
+     */
+    public static function via(array $options): string
+    {
+        $via = $options['safe_fetch.via'] ?? null;
+
+        return $via === 'fetch' || $via === 'download' ? $via : 'request';
+    }
+
+    /**
      * Whether a proxy option only repeats the environment's proxies — Guzzle turns `HTTP_PROXY`,
      * `HTTPS_PROXY` and `NO_PROXY` into every client's default. Those the guard bypasses (it sends
      * `proxy: ''`); a proxy the caller chose is refused instead.
@@ -152,7 +166,7 @@ final readonly class GuardMiddleware
     private function hop(callable $handler, string $url, RequestInterface $request, array $options, int $n, ?float $deadline, ?string $firstOrigin): PromiseInterface
     {
         try {
-            $vetted = $this->manager->vetHop($url, $this->policy);
+            $vetted = $this->manager->vetHop($url, $this->policy, self::via($options));
             $pins = $vetted->pinningOptions();
         } catch (Throwable $exception) {
             return Create::rejectionFor($exception);
@@ -180,6 +194,7 @@ final readonly class GuardMiddleware
 
         $hopOptions = $options;
         unset($hopOptions['safe_fetch.before_hop']);
+        $hopOptions['safe_fetch.via'] = self::via($options);
 
         if ($n > 0) {
             // The caller's delay applies once, before the first request — as Guzzle's own redirects do.
@@ -252,7 +267,7 @@ final readonly class GuardMiddleware
                 if ($stats instanceof TransferStats && ! self::stubbed($stats) && ! self::connectedInside($stats, $vetted)) {
                     $response->getBody()->close();
 
-                    return $this->refusePin($vetted);
+                    return $this->refusePin($vetted, $options);
                 }
 
                 if ($this->follows($response, $request)) {
@@ -263,7 +278,7 @@ final readonly class GuardMiddleware
             },
             function (mixed $reason) use (&$stats, &$redirect, &$head, $check, $handler, $request, $options, $n, $deadline, $firstOrigin, $vetted, $sink): PromiseInterface {
                 if ($check?->refused === true || ($stats instanceof TransferStats && self::connectedOutside($stats, $vetted))) {
-                    return $this->refusePin($vetted);
+                    return $this->refusePin($vetted, $options);
                 }
 
                 if ($redirect instanceof ResponseInterface) {
@@ -433,13 +448,17 @@ final readonly class GuardMiddleware
         return $response->withHeader(self::TRUNCATED_HEADER, '1')->withBody(Utils::streamFor(substr($data, 0, $max)));
     }
 
-    /** The connection went somewhere the guard did not vet: report it, announce it, refuse it. */
-    private function refusePin(VettedDestination $vetted): PromiseInterface
+    /**
+     * The connection went somewhere the guard did not vet: report it, announce it, refuse it.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    private function refusePin(VettedDestination $vetted, array $options): PromiseInterface
     {
         $exception = DestinationRejected::because(Reason::CannotPin, $vetted->url, $vetted->host);
 
         report($exception);
-        $this->events->dispatch(new DestinationRefused(Reason::CannotPin, $vetted->host));
+        $this->events->dispatch(new DestinationRefused(Reason::CannotPin, $vetted->host, via: self::via($options)));
 
         return Create::rejectionFor($exception);
     }

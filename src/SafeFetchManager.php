@@ -58,14 +58,14 @@ class SafeFetchManager
      */
     public function vet(string $url, ?DestinationPolicy $policy = null): VettedDestination
     {
-        return $this->container->make(VetDestinationAction::class)->execute($url, $policy ?? $this->policy());
+        return $this->judge($url, $policy ?? $this->policy(), 'vet');
     }
 
     /** Whether the policy lets `$url` through. Never throws a verdict. */
     public function allows(string $url, ?DestinationPolicy $policy = null): bool
     {
         try {
-            $this->container->make(VetDestinationAction::class)->execute($url, $policy ?? $this->policy());
+            $this->judge($url, $policy ?? $this->policy(), 'allows');
         } catch (SafeFetchException) {
             return false;
         }
@@ -186,10 +186,22 @@ class SafeFetchManager
     /**
      * One hop of a guarded request, vetted.
      *
+     * @param  'request'|'fetch'|'download'  $via
+     *
      * @internal called by the guard middleware, once per hop, so the fake sees every hop
      */
-    public function vetHop(string $url, DestinationPolicy $policy): VettedDestination
+    public function vetHop(string $url, DestinationPolicy $policy, string $via = 'request'): VettedDestination
     {
-        return $this->container->make(VetDestinationAction::class)->execute($url, $policy);
+        return $this->judge($url, $policy, $via);
+    }
+
+    /**
+     * Judge `$url` through the action, saying where it was asked.
+     *
+     * @param  'vet'|'allows'|'request'|'fetch'|'download'  $via
+     */
+    protected function judge(string $url, DestinationPolicy $policy, string $via): VettedDestination
+    {
+        return $this->container->make(VetDestinationAction::class)->execute($url, $policy, $via);
     }
 }

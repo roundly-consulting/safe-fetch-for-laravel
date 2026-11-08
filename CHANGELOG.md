@@ -50,7 +50,9 @@ Initial public release.
   `SafeUrl::withoutLookup()` validates through `precheck()`.
 - `php artisan safe-fetch:check {url?}`: a URL's verdict, or a check of the environment; `--json`
   prints either as JSON for scripts and monitoring.
-- `DestinationRefused` event for every refusal (reason, host, rule; never the URL).
+- `DestinationRefused` event for every refusal (reason, host, rule, and `via` — `vet`, `allows`,
+  `precheck`, `request`, `fetch` or `download` — so alerting can ignore form validation; never
+  the URL).
 - `SafeFetch::fake()` and `SafeFetch::fakeDns()` for host tests, with assertions for what was
   vetted, refused, fetched and sent (`assertNothingRefused()` among them).
 - English and Slovak messages that never name the URL or an address; `blocked` and `unresolved`

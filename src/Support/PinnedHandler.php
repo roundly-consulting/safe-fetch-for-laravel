@@ -16,6 +16,7 @@ use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Events\DestinationRefused;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
+use RoundlyConsulting\SafeFetch\Http\GuardMiddleware;
 
 /**
  * The handler a guarded request is sent through: curl, always (a stream handler would ignore the
@@ -54,7 +55,7 @@ final class PinnedHandler
             );
 
             report($exception);
-            $this->events->dispatch(new DestinationRefused(Reason::CannotPin, $exception->host()));
+            $this->events->dispatch(new DestinationRefused(Reason::CannotPin, $exception->host(), via: GuardMiddleware::via($options)));
 
             return Create::rejectionFor($exception);
         }

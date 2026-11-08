@@ -533,7 +533,7 @@ it('rejects a connection outside the vetted set', function (): void {
     expect($result)->toBeInstanceOf(DestinationRejected::class)
         ->and($result->reason())->toBe(Reason::CannotPin)
         ->and($reported)->toBe([Reason::CannotPin]);
-    Event::assertDispatched(DestinationRefused::class, static fn (DestinationRefused $event): bool => $event->reason === Reason::CannotPin && $event->host === 'hooks.example');
+    Event::assertDispatched(DestinationRefused::class, static fn (DestinationRefused $event): bool => $event->reason === Reason::CannotPin && $event->host === 'hooks.example' && $event->via === 'request');
 });
 
 it('treats a handler without a connected address as unpinned', function (): void {

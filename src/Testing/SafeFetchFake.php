@@ -79,7 +79,7 @@ final class SafeFetchFake extends SafeFetchManager
     public function allows(string $url, ?DestinationPolicy $policy = null): bool
     {
         try {
-            $this->recording($url, 'allows', fn (): VettedDestination => parent::vet($url, $policy));
+            $this->recording($url, 'allows', fn (): VettedDestination => parent::judge($url, $policy ?? $this->policy(), 'allows'));
         } catch (SafeFetchException) {
             return false;
         }
@@ -102,9 +102,9 @@ final class SafeFetchFake extends SafeFetchManager
         return $canonical;
     }
 
-    public function vetHop(string $url, DestinationPolicy $policy): VettedDestination
+    public function vetHop(string $url, DestinationPolicy $policy, string $via = 'request'): VettedDestination
     {
-        return $this->recording($url, 'http', fn (): VettedDestination => parent::vetHop($url, $policy));
+        return $this->recording($url, 'http', fn (): VettedDestination => parent::vetHop($url, $policy, $via));
     }
 
     public function fetch(

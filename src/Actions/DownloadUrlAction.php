@@ -52,7 +52,7 @@ final readonly class DownloadUrlAction
                 $started = true;
 
                 return CappedSink::toFile($path, $maxBytes);
-            });
+            }, 'download');
         } catch (Throwable $exception) {
             if ($started && is_file($path)) {
                 unlink($path);

@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Validator;
 use RoundlyConsulting\SafeFetch\Contracts\HostResolver;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\RedirectPolicy;
@@ -11,6 +13,7 @@ use RoundlyConsulting\SafeFetch\Events\DestinationRefused;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
 use RoundlyConsulting\SafeFetch\Facades\SafeFetch;
+use RoundlyConsulting\SafeFetch\Rules\SafeUrl;
 use RoundlyConsulting\SafeFetch\Support\PrivateNetworks;
 use RoundlyConsulting\SafeFetch\Tests\Support\Helpers;
 
@@ -457,4 +460,48 @@ it('exempts a metadata address only through an allowed range', function (): void
         ->and(PrivateNetworks::isMetadata('169.254.169.253'))->toBeFalse()
         ->and(PrivateNetworks::isMetadata('10.0.0.1'))->toBeFalse()
         ->and(PrivateNetworks::isMetadata('not an address'))->toBeFalse();
+});
+
+it('says where a refusal came from', function (): void {
+    Event::fake([DestinationRefused::class]);
+    Http::fake(['public.example/*' => Http::response('', 307, ['Location' => 'https://inward.example/'])]);
+    $redirects = SafeFetch::policy()->followRedirects();
+    $path = sys_get_temp_dir().'/safe-fetch-via-'.bin2hex(random_bytes(4));
+
+    Helpers::refusal(fn () => SafeFetch::vet('https://inward.example/vet'));
+    SafeFetch::allows('https://inward.example/allows');
+    Validator::make(['url' => 'https://inward.example/rule'], ['url' => [new SafeUrl]])->passes();
+    Helpers::refusal(fn () => SafeFetch::precheck('https://localhost/'));
+    Validator::make(['url' => 'https://10.0.0.1/'], ['url' => [SafeUrl::withoutLookup()]])->passes();
+    Helpers::refusal(fn () => Http::safe($redirects)->get('https://public.example/request'));
+    Helpers::refusal(fn () => SafeFetch::fetch('https://public.example/fetch', followRedirects: true));
+    Helpers::refusal(fn () => SafeFetch::download('https://public.example/download', $path, followRedirects: true));
+
+    $vias = [];
+    Event::assertDispatched(DestinationRefused::class, static function (DestinationRefused $event) use (&$vias): bool {
+        $vias[] = $event->via;
+
+        return true;
+    });
+
+    expect($vias)->toBe(['vet', 'allows', 'allows', 'precheck', 'precheck', 'request', 'fetch', 'download'])
+        ->and(file_exists($path))->toBeFalse()
+        ->and((new DestinationRefused(Reason::Blocked, 'x.example'))->via)->toBe('vet');
+});
+
+it('says where a refusal came from under the fake', function (): void {
+    SafeFetch::fake(['inward.example' => '10.0.0.5']);
+    Event::fake([DestinationRefused::class]);
+
+    SafeFetch::allows('https://inward.example/');
+    Helpers::refusal(fn () => SafeFetch::vet('https://inward.example/'));
+
+    $vias = [];
+    Event::assertDispatched(DestinationRefused::class, static function (DestinationRefused $event) use (&$vias): bool {
+        $vias[] = $event->via;
+
+        return true;
+    });
+
+    expect($vias)->toBe(['allows', 'vet']);
 });

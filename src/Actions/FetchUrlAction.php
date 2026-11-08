@@ -39,7 +39,7 @@ final readonly class FetchUrlAction
      */
     public function execute(string $url, FetchOptions $options, DestinationPolicy $policy): FetchedResponse
     {
-        $done = $this->transfer->run($url, $options, $policy, CappedSink::open(...));
+        $done = $this->transfer->run($url, $options, $policy, CappedSink::open(...), 'fetch');
 
         return new FetchedResponse($done->status(), $done->sink->contents(), $done->contentType(), $done->url, $done->headers());
     }

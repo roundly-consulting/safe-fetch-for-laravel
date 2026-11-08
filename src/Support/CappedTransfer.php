@@ -44,6 +44,7 @@ final readonly class CappedTransfer
 
     /**
      * @param  Closure(int): CappedSink  $sinkForHop  a fresh sink, under the given cap, for every hop
+     * @param  'fetch'|'download'  $via  who asked, for `DestinationRefused::$via`
      *
      * @throws DestinationRejected
      * @throws DestinationUnavailable
@@ -51,7 +52,7 @@ final readonly class CappedTransfer
      * @throws UnsafeRequestOptions for a Host header
      * @throws InvalidArgumentException for a cap or timeout out of range
      */
-    public function run(string $url, FetchOptions $options, DestinationPolicy $policy, Closure $sinkForHop): CompletedTransfer
+    public function run(string $url, FetchOptions $options, DestinationPolicy $policy, Closure $sinkForHop, string $via): CompletedTransfer
     {
         $maxBytes = $options->maxBytes ?? SafeFetchConfig::fetchMaxBytes();
         $timeout = $options->timeout ?? SafeFetchConfig::fetchTimeout();
@@ -90,6 +91,7 @@ final readonly class CappedTransfer
             ->timeout($timeout)
             ->withOptions([
                 'sink' => $progress->sink->resource,
+                'safe_fetch.via' => $via,
                 // Called for every header block: an informational 1xx (`103 Early Hints`) is not the
                 // answer, and a redirect the guard follows is the guard's to read.
                 'on_headers' => static function (ResponseInterface $answer) use ($progress, $maxBytes, $redirects): void {
