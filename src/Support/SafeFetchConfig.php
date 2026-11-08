@@ -6,6 +6,7 @@ namespace RoundlyConsulting\SafeFetch\Support;
 
 use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\PackageToolkit\Support\Config;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\CanonicalUrl;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\RedirectPolicy;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
@@ -82,19 +83,45 @@ final class SafeFetchConfig
      */
     private static function appUrlHost(): array
     {
+        $canonical = self::appUrl();
+
+        return $canonical === null || $canonical->ipLiteral ? [] : [$canonical->host];
+    }
+
+    /**
+     * Whether `app.url` is set but names no host the guard can read — so the app-host block refuses
+     * nothing for it. An address (`http://127.0.0.1:8000`) is read: the address table judges it.
+     */
+    public static function appUrlUnreadable(): bool
+    {
+        $url = config('app.url');
+
+        return $url !== null && (! is_string($url) || trim($url) !== '') && self::appUrl() === null;
+    }
+
+    /**
+     * `app.url` canonicalised — read as https when it names no scheme (`myapp.example`,
+     * `//myapp.example:8080`), as such deployments set it — or null.
+     */
+    private static function appUrl(): ?CanonicalUrl
+    {
         $url = config('app.url');
 
         if (! is_string($url) || trim($url) === '') {
-            return [];
+            return null;
+        }
+
+        $url = trim($url);
+
+        if (preg_match('#^[a-z][a-z0-9+.-]*://#i', $url) !== 1) {
+            $url = 'https://'.ltrim($url, '/');
         }
 
         try {
-            $canonical = (new UrlCanonicaliser)->canonicalise(trim($url));
+            return (new UrlCanonicaliser)->canonicalise($url);
         } catch (DestinationRejected) {
-            return [];
+            return null;
         }
-
-        return $canonical->ipLiteral ? [] : [$canonical->host];
     }
 
     /**

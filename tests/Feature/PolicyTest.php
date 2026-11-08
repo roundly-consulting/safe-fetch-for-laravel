@@ -115,6 +115,14 @@ it('refuses extra app hosts', function (): void {
         ->and(blockedBy(fn () => SafeFetch::vet('https://y.example/', SafeFetch::policy()->appHosts(['y.example']))))->toBe('app_host');
 });
 
+it('reads an app url written without a scheme', function (string $url): void {
+    config()->set('app.url', $url);
+    SafeFetch::fakeDns(['myapp.example' => '93.184.216.34']);
+
+    expect(SafeFetch::policy()->appHosts)->toBe(['myapp.example'])
+        ->and(blockedBy(fn () => SafeFetch::vet('https://myapp.example/admin')))->toBe('app_host');
+})->with(['myapp.example', 'MyApp.example:8080', '//myapp.example', ' myapp.example/app ', 'https://myapp.example']);
+
 it('ignores an app url it cannot read', function (mixed $url): void {
     config()->set('app.url', $url);
 

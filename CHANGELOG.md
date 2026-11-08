@@ -25,8 +25,8 @@ Initial public release.
   `*.localhost` by name. Shared with the Node twin through one contract fixture.
 - A policy (`DestinationPolicy`, `config/safe-fetch.php`): https only by default, ports, a strict
   host allowlist (`allowHosts()` replaces it and refuses an empty list, so a list that happens to
-  be empty never opens the guard), blocked hosts, the app's own hosts (`blockAppHosts()` turns the
-  block on or off over the configuration), private-host exemptions (still resolved and pinned,
+  be empty never opens the guard), blocked hosts, the app's own hosts (from `app.url`, read as
+  https when it has no scheme; `blockAppHosts()` turns the block on or off over the configuration), private-host exemptions (still resolved and pinned,
   never for a link-local or other cloud-metadata address — ECS and EKS credential endpoints
   included — only an allowed range names one back in), allowed and
   blocked address ranges (an allowed range covering every address — `0.0.0.0/0`, `::/0`, or an
@@ -57,8 +57,9 @@ Initial public release.
   should not wait on DNS; the URL is judged in full again when it is fetched.
 - The `SafeUrl` rule and the `safe_url` string rule (`safe_url:http` takes http too), with one
   message whatever the reason; `SafeUrl::withoutLookup()` validates through `precheck()`.
-- `php artisan safe-fetch:check {url?}`: a URL's verdict, or a check of the environment; `--json`
-  prints either as JSON for scripts and monitoring.
+- `php artisan safe-fetch:check {url?}`: a URL's verdict, or a check of the environment (warning,
+  among others, when `app.url` names no host the guard can read); `--json` prints either as JSON
+  for scripts and monitoring.
 - `DestinationRefused` event for every refusal (reason, host, rule, and `via` — `vet`, `allows`,
   `precheck`, `request`, `fetch` or `download` — so alerting can ignore form validation; never
   the URL).

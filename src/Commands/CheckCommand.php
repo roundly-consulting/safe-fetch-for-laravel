@@ -11,6 +11,7 @@ use RoundlyConsulting\SafeFetch\Exceptions\SafeFetchException;
 use RoundlyConsulting\SafeFetch\SafeFetchManager;
 use RoundlyConsulting\SafeFetch\Support\AddressRanges;
 use RoundlyConsulting\SafeFetch\Support\CurlSupport;
+use RoundlyConsulting\SafeFetch\Support\SafeFetchConfig;
 use Throwable;
 
 /**
@@ -173,6 +174,10 @@ final class CheckCommand extends Command
 
         if ($broad !== []) {
             $warnings[] = count($broad).' allowed range(s) are broader than /8 (IPv4) or /32 (IPv6) (safe-fetch.ranges.allowed).';
+        }
+
+        if ($policy->blockAppHosts && SafeFetchConfig::appUrlUnreadable()) {
+            $warnings[] = 'app.url names no host the guard can read, so the app\'s own host is not refused (safe-fetch.app_hosts.block).';
         }
 
         if ($policy->redirects->enabled && $policy->redirects->allowDowngrade) {

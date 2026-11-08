@@ -67,6 +67,23 @@ it('check warns about settings that weaken the guard', function (): void {
         ->assertExitCode(0);
 });
 
+it('check warns about an app url the guard cannot read', function (mixed $url, bool $warns): void {
+    config()->set('app.url', $url);
+
+    Artisan::call('safe-fetch:check', ['--json' => true]);
+    $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+    $warning = 'app.url names no host the guard can read, so the app\'s own host is not refused (safe-fetch.app_hosts.block).';
+
+    expect(in_array($warning, $report['warnings'], true))->toBe($warns);
+})->with([
+    'unreadable' => ['http://', true],
+    'not a url' => ['not a url', true],
+    'no string' => [42, true],
+    'a bare host' => ['myapp.example', false],
+    'an address' => ['http://127.0.0.1:8000', false],
+    'blank' => ['', false],
+]);
+
 it('check fails without curl or with a broken configuration', function (): void {
     CurlSupport::assume(available: false);
 
