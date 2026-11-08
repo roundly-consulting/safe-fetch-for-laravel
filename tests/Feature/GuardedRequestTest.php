@@ -474,6 +474,26 @@ it('caps a guarded response', function (): void {
         ->toThrow(UnsafeRequestOptions::class, '[sink]');
 });
 
+it('tells a truncated response from a whole one', function (): void {
+    Http::fake([
+        'hooks.example/big' => Http::response(str_repeat('x', 8192)),
+        'hooks.example/exact' => Http::response(str_repeat('y', 4096)),
+    ]);
+    $policy = SafeFetch::policy()->maxResponseBytes(4096);
+
+    $big = SafeFetch::http($policy)->get('https://hooks.example/big');
+    $exact = SafeFetch::http($policy)->get('https://hooks.example/exact');
+
+    expect(SafeFetchManager::TRUNCATED_HEADER)->toBe('Safe-Fetch-Truncated')
+        ->and(GuardMiddleware::TRUNCATED_HEADER)->toBe(SafeFetchManager::TRUNCATED_HEADER)
+        ->and(SafeFetch::truncated($big))->toBeTrue()
+        ->and(SafeFetch::truncated($exact))->toBeFalse()
+        ->and(SafeFetch::truncated($big->toPsrResponse()))->toBeTrue()
+        ->and(SafeFetch::truncated($exact->toPsrResponse()))->toBeFalse()
+        ->and(app(SafeFetchManager::class)->truncated(new PsrResponse(200, ['Safe-Fetch-Truncated' => '0'])))->toBeFalse()
+        ->and(app(SafeFetchManager::class)->truncated(new PsrResponse(200, ['safe-fetch-truncated' => '1'])))->toBeTrue();
+});
+
 it('composes with middleware in either order', function (): void {
     Http::fake([
         'hooks.example/start' => Http::response('', 307, ['Location' => '/next']),

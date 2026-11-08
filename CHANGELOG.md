@@ -24,7 +24,8 @@ Initial public release.
   host allowlist (`allowHosts()` replaces it and refuses an empty list, so a list that happens to
   be empty never opens the guard), blocked hosts, the app's own hosts, private-host exemptions (still resolved and
   pinned), allowed and blocked address ranges, and a response cap (`maxResponseBytes`) that cuts
-  a body and marks it `Safe-Fetch-Truncated: 1`. `blockAppHosts()` switches the app-host block
+  a body and marks it `Safe-Fetch-Truncated: 1` (`SafeFetch::truncated($response)` reads it,
+  `SafeFetchManager::TRUNCATED_HEADER` names it). `blockAppHosts()` switches the app-host block
   on or off over whatever the configuration says. `withoutHostAllowlist()`,
   `withoutPrivateHosts()` and `withoutAllowedRanges()` drop the host's carve-outs while keeping
   its blocks — the start of a policy for another package's untrusted URLs.

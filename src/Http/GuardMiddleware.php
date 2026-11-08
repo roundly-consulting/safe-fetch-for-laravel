@@ -49,7 +49,7 @@ final readonly class GuardMiddleware
         'accept', 'accept-encoding', 'accept-language', 'content-type', 'content-length', 'content-encoding', 'user-agent',
     ];
 
-    public const string TRUNCATED_HEADER = 'Safe-Fetch-Truncated';
+    public const string TRUNCATED_HEADER = SafeFetchManager::TRUNCATED_HEADER;
 
     public function __construct(
         private SafeFetchManager $manager,

@@ -7,6 +7,8 @@ namespace RoundlyConsulting\SafeFetch;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Psr\Http\Message\ResponseInterface;
 use RoundlyConsulting\SafeFetch\Actions\FetchUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\GuardRequestAction;
 use RoundlyConsulting\SafeFetch\Actions\VetDestinationAction;
@@ -36,6 +38,9 @@ use RoundlyConsulting\SafeFetch\Support\SafeFetchConfig;
  */
 class SafeFetchManager
 {
+    /** The header a guarded response cut at `maxResponseBytes` carries, with the value `1`. */
+    public const string TRUNCATED_HEADER = 'Safe-Fetch-Truncated';
+
     public function __construct(
         protected readonly Container $container,
     ) {}
@@ -99,6 +104,19 @@ class SafeFetchManager
             new FetchOptions($maxBytes, $timeout, $accept, $headers, $followRedirects),
             $policy ?? $this->policy(),
         );
+    }
+
+    /**
+     * Whether a guarded response was cut at the policy's `maxResponseBytes` — its body is only the
+     * first that many bytes. Stateless: it reads the response's {@see self::TRUNCATED_HEADER}.
+     */
+    public function truncated(Response|ResponseInterface $response): bool
+    {
+        $value = $response instanceof Response
+            ? $response->header(self::TRUNCATED_HEADER)
+            : $response->getHeaderLine(self::TRUNCATED_HEADER);
+
+        return $value === '1';
     }
 
     /** The configured default policy, to tighten or loosen per call. */

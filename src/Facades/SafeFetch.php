@@ -16,6 +16,7 @@ use RoundlyConsulting\SafeFetch\Testing\SafeFetchFake;
  * @method static \Illuminate\Http\Client\PendingRequest http(\RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static \Illuminate\Http\Client\PendingRequest guard(\Illuminate\Http\Client\PendingRequest $request, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static \RoundlyConsulting\SafeFetch\DataTransferObjects\FetchedResponse fetch(string $url, int|null $maxBytes = null, int|null $timeout = null, string|null $accept = null, array<string, string> $headers = [], bool|null $followRedirects = null, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
+ * @method static bool truncated(\Illuminate\Http\Client\Response|\Psr\Http\Message\ResponseInterface $response)
  * @method static \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy policy()
  * @method static \RoundlyConsulting\SafeFetch\Handles\Networks networks()
  * @method static \RoundlyConsulting\SafeFetch\Handles\Urls urls()

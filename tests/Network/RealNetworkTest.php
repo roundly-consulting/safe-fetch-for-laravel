@@ -321,6 +321,14 @@ it('caps a real guarded response', function (): void {
         ->and(microtime(true) - $started)->toBeLessThan(10.0);
 });
 
+it('keeps the connected address on a truncated response', function (): void {
+    $response = SafeFetch::guard(Http::timeout(20), networkPolicy()->maxResponseBytes(4096))->get($this->server->url('pin.invalid', '/endless'));
+
+    expect(SafeFetch::truncated($response))->toBeTrue()
+        ->and(strlen($response->body()))->toBe(4096)
+        ->and($response->handlerStats()['primary_ip'] ?? null)->toBe('127.0.0.1');
+});
+
 it('leaves a real body under the cap untouched', function (): void {
     $response = Http::safe(networkPolicy()->maxResponseBytes(4096))->get($this->server->url('pin.invalid', '/hello.txt'));
 
