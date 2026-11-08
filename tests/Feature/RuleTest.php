@@ -79,3 +79,12 @@ it('validates without a lookup under a policy, with the one message', function (
         ->and(Validator::make(['feed' => 'https://other.example/'], ['feed' => [$rule]])->errors()->first('feed'))
         ->toBe('The feed must be a URL this application is allowed to fetch.');
 });
+
+it('accepts http through the string rule parameter', function (): void {
+    expect(Validator::make(['url' => 'http://docs.example/'], ['url' => 'safe_url'])->passes())->toBeFalse()
+        ->and(Validator::make(['url' => 'http://docs.example/'], ['url' => 'safe_url:http'])->passes())->toBeTrue()
+        ->and(Validator::make(['url' => 'https://docs.example/'], ['url' => 'safe_url:http'])->passes())->toBeTrue()
+        ->and(Validator::make(['url' => 'http://intranet.example/'], ['url' => 'safe_url:http'])->passes())->toBeFalse()
+        ->and(fn () => Validator::make(['url' => 'http://docs.example/'], ['url' => 'safe_url:htp'])->passes())
+        ->toThrow(InvalidArgumentException::class, 'only the [http] parameter');
+});

@@ -8,6 +8,7 @@ use Illuminate\Container\Container;
 use Illuminate\Contracts\Validation\Factory as ValidationFactory;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Validation\Validator;
+use InvalidArgumentException;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 use RoundlyConsulting\SafeFetch\Commands\CheckCommand;
@@ -69,10 +70,20 @@ final class SafeFetchServiceProvider extends PackageServiceProvider
         });
 
         $this->callAfterResolving(ValidationFactory::class, static function (ValidationFactory $validation): void {
+            // `safe_url:http` also takes http; any other parameter is a typo, never ignored.
             $validation->extend(
                 'safe_url',
-                static fn (string $attribute, mixed $value): bool => is_string($value)
-                    && Container::getInstance()->make(SafeFetchManager::class)->allows($value),
+                static function (string $attribute, mixed $value, array $parameters): bool {
+                    foreach ($parameters as $parameter) {
+                        if ($parameter !== 'http') {
+                            throw new InvalidArgumentException('The safe_url rule takes only the [http] parameter.');
+                        }
+                    }
+
+                    $manager = Container::getInstance()->make(SafeFetchManager::class);
+
+                    return is_string($value) && $manager->allows($value, $parameters === [] ? null : $manager->policy()->allowHttp());
+                },
                 'safe-fetch::validation.safe_url',
             );
 
