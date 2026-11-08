@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Container\Container;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
+use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
 use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\Support\CappedSink;
 use RoundlyConsulting\SafeFetch\Support\CurlOptions;
@@ -80,4 +81,16 @@ it('knows which reasons can heal', function (): void {
 
     expect($retryable)->toBe([Reason::Unresolved, Reason::Timeout, Reason::Connection])
         ->and(UnsafeRequestOptions::option('proxy', 'why.')->getMessage())->toBe('A guarded request cannot use the [proxy] option: why.');
+});
+
+it('keeps the verdict distinguishable for code', function (): void {
+    $blocked = DestinationRejected::because(Reason::Blocked, 'https://intranet.example/', 'intranet.example', 'private_address');
+    $unresolved = DestinationUnavailable::unresolved('https://nowhere.example/', 'nowhere.example');
+
+    expect($blocked->getMessage())->toBe($unresolved->getMessage())
+        ->and($blocked->reason())->toBe(Reason::Blocked)
+        ->and($unresolved->reason())->toBe(Reason::Unresolved)
+        ->and($blocked->retryable())->toBeFalse()
+        ->and($unresolved->retryable())->toBeTrue()
+        ->and($blocked->blockedBy())->toBe('private_address');
 });

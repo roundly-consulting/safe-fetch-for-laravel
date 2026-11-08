@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Arr;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
+use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
 
 /**
  * @return array<string, string>
@@ -49,6 +50,20 @@ it('has one message per reason', function (): void {
 it('speaks slovak through the package namespace', function (): void {
     app()->setLocale('sk');
 
-    expect(__('safe-fetch::messages.blocked'))->toBe('URL adresu nie je možné načítať: jej cieľ nie je povolený.')
+    expect(__('safe-fetch::messages.blocked'))->toBe('URL adresu nie je možné načítať: jej cieľ nie je povolený alebo nie je dostupný.')
         ->and(DestinationRejected::because(Reason::Port, 'https://x.example:1/')->getMessage())->toBe('URL adresu nie je možné načítať: jej port nie je povolený.');
 });
+
+it('gives blocked and unresolved the same message in every locale', function (string $locale, string $message): void {
+    app()->setLocale($locale);
+
+    $blocked = DestinationRejected::because(Reason::Blocked, 'https://intranet.example/', 'intranet.example', 'private_address');
+    $unresolved = DestinationUnavailable::unresolved('https://nowhere.example/', 'nowhere.example');
+
+    expect($blocked->getMessage())->toBe($message)
+        ->and($unresolved->getMessage())->toBe($message)
+        ->and(__('safe-fetch::messages.unresolved'))->toBe(__('safe-fetch::messages.blocked'));
+})->with([
+    ['en', 'The URL cannot be fetched: its destination is not allowed or cannot be reached.'],
+    ['sk', 'URL adresu nie je možné načítať: jej cieľ nie je povolený alebo nie je dostupný.'],
+]);

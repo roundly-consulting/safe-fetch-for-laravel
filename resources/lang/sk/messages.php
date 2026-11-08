@@ -8,8 +8,9 @@ return [
     'credentials' => 'URL adresu nie je možné načítať: nesmie obsahovať používateľské meno ani heslo.',
     'non_canonical_host' => 'URL adresu nie je možné načítať: jej hostiteľ nie je zapísaný v štandardnom tvare.',
     'port' => 'URL adresu nie je možné načítať: jej port nie je povolený.',
-    'blocked' => 'URL adresu nie je možné načítať: jej cieľ nie je povolený.',
-    'unresolved' => 'URL adresu teraz nie je možné načítať: jej hostiteľa sa nepodarilo nájsť.',
+    // blocked and unresolved read the same: telling them apart would map the internal network.
+    'blocked' => 'URL adresu nie je možné načítať: jej cieľ nie je povolený alebo nie je dostupný.',
+    'unresolved' => 'URL adresu nie je možné načítať: jej cieľ nie je povolený alebo nie je dostupný.',
     'not_allowed' => 'URL adresu nie je možné načítať: jej hostiteľ nie je v zozname povolených hostiteľov.',
     'cannot_pin' => 'Požiadavka nebola odoslaná: jej spojenie sa nepodarilo zabezpečiť na overený cieľ.',
     'too_many_redirects' => 'URL adresu nie je možné načítať: presmerováva príliš veľakrát.',

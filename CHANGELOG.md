@@ -40,4 +40,5 @@ Initial public release.
 - `php artisan safe-fetch:check {url?}`: a URL's verdict, or a check of the environment.
 - `DestinationRefused` event for every refusal (reason, host, rule; never the URL).
 - `SafeFetch::fake()` and `SafeFetch::fakeDns()` for host tests.
-- English and Slovak messages.
+- English and Slovak messages that never name the URL or an address; `blocked` and `unresolved`
+  read the same, so a message shown to whoever sent the URL cannot map the internal network.

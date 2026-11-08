@@ -8,8 +8,9 @@ return [
     'credentials' => 'The URL cannot be fetched: it must not contain a user name or password.',
     'non_canonical_host' => 'The URL cannot be fetched: its host is not written in a standard form.',
     'port' => 'The URL cannot be fetched: its port is not allowed.',
-    'blocked' => 'The URL cannot be fetched: its destination is not allowed.',
-    'unresolved' => 'The URL cannot be fetched right now: its host could not be found.',
+    // blocked and unresolved read the same: telling them apart would map the internal network.
+    'blocked' => 'The URL cannot be fetched: its destination is not allowed or cannot be reached.',
+    'unresolved' => 'The URL cannot be fetched: its destination is not allowed or cannot be reached.',
     'not_allowed' => 'The URL cannot be fetched: its host is not on the list of allowed hosts.',
     'cannot_pin' => 'The request was not sent: its connection could not be secured to the checked destination.',
     'too_many_redirects' => 'The URL cannot be fetched: it redirects too many times.',

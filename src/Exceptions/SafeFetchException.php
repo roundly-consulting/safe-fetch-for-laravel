@@ -15,10 +15,15 @@ use Throwable;
  * Every verdict and failure the package reports: a refused destination, one that cannot be
  * reached right now, or a fetch that failed.
  *
- * The message is fixed per reason (`safe-fetch::messages.<reason>`) and never names the URL or an
- * address, so it is safe to show an end user: telling "private" from "not found" would map the
- * host's internal network for whoever controls the URL. The URL is kept for the caller in
- * {@see self::url()}.
+ * The message is fixed per reason (`safe-fetch::messages.<reason>`), never names the URL or an
+ * address, and reads the same for `blocked` and `unresolved` — so it is safe to show an end user.
+ * Telling "private" from "not found" would map the host's internal network for whoever controls
+ * the URL: an internal name resolves (privately) and is refused, a made-up one does not resolve.
+ *
+ * {@see self::reason()}, {@see self::retryable()} and `DestinationRejected::blockedBy()` do tell
+ * them apart. They are for your code and your operators: never let their difference reach the
+ * person who submitted the URL (a "try again later" shown only for `unresolved` is that oracle
+ * again). The URL is kept for the caller in {@see self::url()}.
  */
 abstract class SafeFetchException extends RuntimeException
 {
