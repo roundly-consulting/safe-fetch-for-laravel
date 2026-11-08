@@ -2,87 +2,73 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Facade;
-use PHPUnit\Framework\ExpectationFailedException;
-use RoundlyConsulting\PackageTemplate\Actions\ExamplePackageTemplateAction;
-use RoundlyConsulting\PackageTemplate\DataTransferObjects\ExamplePackageTemplateData;
-use RoundlyConsulting\PackageTemplate\Facades\PackageTemplate;
-use RoundlyConsulting\PackageTemplate\PackageTemplateManager;
-use RoundlyConsulting\PackageTemplate\Testing\PackageTemplateFake;
+use Illuminate\Support\Facades\Http;
+use RoundlyConsulting\SafeFetch\Actions\FetchUrlAction;
+use RoundlyConsulting\SafeFetch\Actions\GuardRequestAction;
+use RoundlyConsulting\SafeFetch\Actions\VetDestinationAction;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchOptions;
+use RoundlyConsulting\SafeFetch\Facades\SafeFetch;
+use RoundlyConsulting\SafeFetch\Handles\Networks;
+use RoundlyConsulting\SafeFetch\Handles\Urls;
+use RoundlyConsulting\SafeFetch\SafeFetchManager;
 
 /**
- * The public API contract — Actions → Manager → Facade (+ fake) — pinned from day one.
- * Grow these tests with the API: every facade and sub-accessor method through the facade,
- * one DI resolution of the manager, cross-scope refusals, and a passing plus a failing case
- * for every fake assert.
+ * The public API contract — Actions → Manager → Facade (+ fake).
  */
 it('pins the facade contract', function (): void {
-    expect(PackageTemplate::class)
+    expect(SafeFetch::class)
         ->toDocumentItsRoot()
         ->toBeFakeable()
         ->toReachEveryAction(__DIR__.'/../../src/Actions');
 });
 
-it('runs the example through the facade', function (): void {
-    expect(PackageTemplate::example(new ExamplePackageTemplateData('Ada')))->toBe('Hello, Ada!');
+beforeEach(function (): void {
+    SafeFetch::fakeDns(['hooks.example' => '93.184.216.34', 'inward.example' => '10.0.0.5']);
 });
 
-it('runs the example through an injected manager', function (): void {
-    $manager = app(PackageTemplateManager::class);
+it('runs every facade method', function (): void {
+    Http::fake(['hooks.example/*' => Http::response('ok', 200, ['Content-Type' => 'text/plain'])]);
 
-    expect($manager)->toBe(app(PackageTemplateManager::class))
-        ->and($manager->example(new ExamplePackageTemplateData('Ada')))->toBe('Hello, Ada!');
+    expect(SafeFetch::vet('https://hooks.example/a')->url)->toBe('https://hooks.example/a')
+        ->and(SafeFetch::allows('https://inward.example/'))->toBeFalse()
+        ->and(SafeFetch::allows('https://hooks.example/'))->toBeTrue()
+        ->and(SafeFetch::http())->toBeInstanceOf(PendingRequest::class)
+        ->and(SafeFetch::http()->get('https://hooks.example/b')->body())->toBe('ok')
+        ->and(SafeFetch::guard(Http::withToken('t'))->get('https://hooks.example/c')->body())->toBe('ok')
+        ->and(SafeFetch::fetch('https://hooks.example/d')->body)->toBe('ok')
+        ->and(SafeFetch::policy())->toBeInstanceOf(DestinationPolicy::class)
+        ->and(SafeFetch::networks())->toBeInstanceOf(Networks::class)
+        ->and(SafeFetch::urls())->toBeInstanceOf(Urls::class);
+
+    Http::assertSent(static fn ($request): bool => $request->url() === 'https://hooks.example/c' && $request->hasHeader('Authorization', 'Bearer t'));
 });
 
-it('runs the example action directly', function (): void {
-    expect(app(ExamplePackageTemplateAction::class)->execute(new ExamplePackageTemplateData('Ada')))
-        ->toBe('Hello, Ada!');
+it('runs the same api through an injected manager', function (): void {
+    Http::fake(['hooks.example/*' => Http::response('ok', 200)]);
+    $manager = app(SafeFetchManager::class);
+
+    expect($manager)->toBe(app(SafeFetchManager::class))
+        ->and($manager->vet('https://hooks.example/')->addresses)->toBe(['93.184.216.34'])
+        ->and($manager->http()->get('https://hooks.example/x')->body())->toBe('ok')
+        ->and($manager->fetch('https://hooks.example/y')->status)->toBe(200);
 });
 
-it('resolves the action through the container so a host override applies', function (): void {
-    app()->bind(ExamplePackageTemplateAction::class, static fn (): never => throw new RuntimeException('overridden'));
+it('runs the raw actions', function (): void {
+    Http::fake(['hooks.example/*' => Http::response('ok', 200)]);
 
-    PackageTemplate::example(new ExamplePackageTemplateData('Ada'));
+    expect(app(VetDestinationAction::class)->execute('https://hooks.example/', SafeFetch::policy())->host)->toBe('hooks.example')
+        ->and(app(GuardRequestAction::class)->execute(Http::withToken('t'), SafeFetch::policy())->post('https://hooks.example/p')->body())->toBe('ok')
+        ->and(app(FetchUrlAction::class)->execute('https://hooks.example/f', new FetchOptions, SafeFetch::policy())->body)->toBe('ok');
+});
+
+it('resolves actions through the container so a host override applies', function (): void {
+    app()->bind(VetDestinationAction::class, static fn (): never => throw new RuntimeException('overridden'));
+
+    SafeFetch::vet('https://hooks.example/');
 })->throws(RuntimeException::class, 'overridden');
-
-it('records facade and injected calls under the fake without running the action', function (): void {
-    app()->bind(ExamplePackageTemplateAction::class, static fn (): never => throw new RuntimeException('ran'));
-
-    $fake = PackageTemplate::fake();
-
-    PackageTemplate::example(new ExamplePackageTemplateData('Ada'));
-    app(PackageTemplateManager::class)->example(new ExamplePackageTemplateData('Grace'));
-
-    expect(app(PackageTemplateManager::class))->toBeInstanceOf(PackageTemplateFake::class);
-
-    $fake->assertExampleCalled();
-    $fake->assertExampleCalled(static fn (ExamplePackageTemplateData $data): bool => $data->name === 'Ada');
-    PackageTemplate::assertExampleCalled(static fn (ExamplePackageTemplateData $data): bool => $data->name === 'Grace');
-});
-
-it('fails assertExampleCalled when nothing was called', function (): void {
-    PackageTemplate::fake()->assertExampleCalled();
-})->throws(ExpectationFailedException::class, 'Expected example() to be called, but it was not.');
-
-it('fails assertExampleCalled when no call matches', function (): void {
-    $fake = PackageTemplate::fake();
-
-    PackageTemplate::example(new ExamplePackageTemplateData('Ada'));
-
-    $fake->assertExampleCalled(static fn (ExamplePackageTemplateData $data): bool => $data->name === 'Grace');
-})->throws(ExpectationFailedException::class, 'no call matched');
-
-it('passes assertNothingCalled on an untouched fake', function (): void {
-    PackageTemplate::fake()->assertNothingCalled();
-});
-
-it('fails assertNothingCalled after a call', function (): void {
-    $fake = PackageTemplate::fake();
-
-    PackageTemplate::example(new ExamplePackageTemplateData('Ada'));
-
-    $fake->assertNothingCalled();
-})->throws(ExpectationFailedException::class, 'example() was called 1 time(s)');
 
 it('declares the global alias for the facade and never a core facade name', function (): void {
     /** @var array{extra: array{laravel: array{aliases: array<string, string>}}} $composer */
@@ -90,12 +76,9 @@ it('declares the global alias for the facade and never a core facade name', func
 
     $aliases = $composer['extra']['laravel']['aliases'];
     $alias = (string) array_key_first($aliases);
-
-    // Both halves: a facade class Laravel ships, and a global alias it registers without one
-    // there (`Str`, `Number`, `Js`, …). Compared case-insensitively, as PHP resolves class names.
     $coreAliases = array_map(strtolower(...), array_keys(Facade::defaultAliases()->all()));
 
-    expect($aliases)->toBe([class_basename(PackageTemplate::class) => PackageTemplate::class])
+    expect($aliases)->toBe([class_basename(SafeFetch::class) => SafeFetch::class])
         ->and(class_exists('Illuminate\\Support\\Facades\\'.$alias))->toBeFalse()
         ->and($coreAliases)->not->toContain(strtolower($alias));
 });

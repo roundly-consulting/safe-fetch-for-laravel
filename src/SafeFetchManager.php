@@ -2,46 +2,130 @@
 
 declare(strict_types=1);
 
-namespace RoundlyConsulting\PackageTemplate;
+namespace RoundlyConsulting\SafeFetch;
 
 use Illuminate\Contracts\Container\Container;
-use RoundlyConsulting\PackageTemplate\Actions\ExamplePackageTemplateAction;
-use RoundlyConsulting\PackageTemplate\DataTransferObjects\ExamplePackageTemplateData;
+use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Client\PendingRequest;
+use RoundlyConsulting\SafeFetch\Actions\FetchUrlAction;
+use RoundlyConsulting\SafeFetch\Actions\GuardRequestAction;
+use RoundlyConsulting\SafeFetch\Actions\VetDestinationAction;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchedResponse;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchOptions;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
+use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
+use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
+use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
+use RoundlyConsulting\SafeFetch\Exceptions\SafeFetchException;
+use RoundlyConsulting\SafeFetch\Handles\Networks;
+use RoundlyConsulting\SafeFetch\Handles\Urls;
+use RoundlyConsulting\SafeFetch\Support\SafeFetchConfig;
 
 /**
- * The package's public API: the root behind the PackageTemplate facade, injectable by its
- * own class-string. Bound as a singleton in PackageTemplateServiceProvider::register().
+ * The package's public API: the root behind the {@see Facades\SafeFetch} facade, injectable by its
+ * own class-string. Each method resolves one action through the container, so a host override and
+ * `SafeFetch::fake()` both apply.
  *
- * Follows the `laravel-package-developer` skill section
- * "Public API: Actions → Manager → Facade (REQUIRED)":
+ * Not final on purpose: {@see Testing\SafeFetchFake} extends it, so code that constructor-injects
+ * the manager still type-checks under the fake.
  *
- *  - Every method is thin — resolve one action through the container and call `execute()`.
- *    Never `new` an action, so host container overrides and the fake both apply.
- *  - Flat methods for the core verbs; a small `final readonly` sub-accessor per sub-area once
- *    there are two or more; `for($model)` for a model-scoped handle.
- *  - Every host-facing action (no `@internal`) must be reachable from here.
- *  - Model traits and model methods call this manager (`app(PackageTemplateManager::class)`),
- *    never an action — so the fake sees them too.
- *
- * Not final on purpose: PackageTemplateFake extends it, so code that constructor-injects this
- * class still type-checks under `PackageTemplate::fake()`. The arch test exempts it from
- * `finalByDefault` by name.
- *
- * Exempt shapes — a pure trait, a per-request static builder, package-author or dev-only
- * tooling — have no host-facing stateful behaviour: delete this manager, the facade, the fake,
- * the example action and FacadeTest, and say why in one README line.
+ * Security-critical callers use {@see self::guard()} / {@see self::http()} rather than the
+ * `Http::safe()` macro: another package registering a `safe` macro after this one would replace it
+ * silently.
  */
-class PackageTemplateManager
+class SafeFetchManager
 {
     public function __construct(
         protected readonly Container $container,
     ) {}
 
     /**
-     * REPLACE ME — rename after the real verb the action performs.
+     * Judge `$url` under the policy (the configured one by default): its rebuilt URL and every
+     * address it resolved to, or the reason it is refused.
+     *
+     * @throws DestinationRejected
+     * @throws DestinationUnavailable when the host does not resolve (retryable)
      */
-    public function example(ExamplePackageTemplateData $data): string
+    public function vet(string $url, ?DestinationPolicy $policy = null): VettedDestination
     {
-        return $this->container->make(ExamplePackageTemplateAction::class)->execute($data);
+        return $this->container->make(VetDestinationAction::class)->execute($url, $policy ?? $this->policy());
+    }
+
+    /** Whether the policy lets `$url` through. Never throws a verdict. */
+    public function allows(string $url, ?DestinationPolicy $policy = null): bool
+    {
+        try {
+            $this->container->make(VetDestinationAction::class)->execute($url, $policy ?? $this->policy());
+        } catch (SafeFetchException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /** A new guarded request from Laravel's HTTP client — `Http::safe()` without the macro. */
+    public function http(?DestinationPolicy $policy = null): PendingRequest
+    {
+        return $this->guard($this->container->make(Factory::class)->createPendingRequest(), $policy);
+    }
+
+    /** Guard a request you built (`Http::withToken($t)`): vetted, pinned and checked on every hop. */
+    public function guard(PendingRequest $request, ?DestinationPolicy $policy = null): PendingRequest
+    {
+        return $this->container->make(GuardRequestAction::class)->execute($request, $policy ?? $this->policy());
+    }
+
+    /**
+     * GET `$url` into memory, guarded, its body capped at `$maxBytes`.
+     *
+     * @param  array<string, string>  $headers
+     *
+     * @throws DestinationRejected
+     * @throws DestinationUnavailable
+     * @throws FetchFailed
+     */
+    public function fetch(
+        string $url,
+        ?int $maxBytes = null,
+        ?int $timeout = null,
+        ?string $accept = null,
+        array $headers = [],
+        ?bool $followRedirects = null,
+        ?DestinationPolicy $policy = null,
+    ): FetchedResponse {
+        return $this->container->make(FetchUrlAction::class)->execute(
+            $url,
+            new FetchOptions($maxBytes, $timeout, $accept, $headers, $followRedirects),
+            $policy ?? $this->policy(),
+        );
+    }
+
+    /** The configured default policy, to tighten or loosen per call. */
+    public function policy(): DestinationPolicy
+    {
+        return SafeFetchConfig::policy();
+    }
+
+    /** The blocked-network table. */
+    public function networks(): Networks
+    {
+        return $this->container->make(Networks::class);
+    }
+
+    /** The guard's URL parser and redirect resolver. */
+    public function urls(): Urls
+    {
+        return $this->container->make(Urls::class);
+    }
+
+    /**
+     * One hop of a guarded request, vetted.
+     *
+     * @internal called by the guard middleware, once per hop, so the fake sees every hop
+     */
+    public function vetHop(string $url, DestinationPolicy $policy): VettedDestination
+    {
+        return $this->container->make(VetDestinationAction::class)->execute($url, $policy);
     }
 }
