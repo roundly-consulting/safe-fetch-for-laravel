@@ -384,6 +384,20 @@ it('leaves a real body under the cap untouched', function (): void {
         ->and($response->hasHeader('Safe-Fetch-Truncated'))->toBeFalse();
 });
 
+it('never passes on a truncated mark a real server sent', function (?int $cap): void {
+    $raw = RawHttpServer::start("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nSafe-Fetch-Truncated: 1\r\nContent-Length: 8\r\nConnection: close\r\n\r\ncomplete");
+
+    try {
+        $response = Http::safe(networkPolicy()->maxResponseBytes($cap))->get("http://pin.invalid:{$raw->port}/");
+    } finally {
+        $raw->stop();
+    }
+
+    expect($response->body())->toBe('complete')
+        ->and(SafeFetch::truncated($response))->toBeFalse()
+        ->and($response->hasHeader('Safe-Fetch-Truncated'))->toBeFalse();
+})->with(['no cap' => [null], 'a cap' => [4096]]);
+
 it('streams a real download to disk under the cap', function (): void {
     $path = tempnam(sys_get_temp_dir(), 'safe-fetch-real-download-');
     $bytes = 20 * 1048576;

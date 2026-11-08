@@ -286,6 +286,8 @@ final readonly class GuardMiddleware
                 }
 
                 $jar?->extractCookies($request, $response);
+                // The mark is the guard's alone: one the server sent would make a whole body read as cut.
+                $response = $response->withoutHeader(self::TRUNCATED_HEADER);
 
                 if ($this->follows($response, $request)) {
                     return $this->follow($handler, $response, $request, $options, $n, $deadline, $firstOrigin, $vetted);

@@ -18,6 +18,8 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 - An `app.url` written as an address (`https://52.10.20.30`) is now refused as `app_host` while
   `app_hosts.block` is on, in any written form (`[::ffff:52.10.20.30]`); it used to be refused only
   when the address was private. The policy carries it as `DestinationPolicy::$appAddresses`.
+- `SafeFetch::truncated()` no longer reports a whole body as cut when the server itself sent a
+  `Safe-Fetch-Truncated` header: the guard strips that header from every upstream response.
 
 ## 1.0.0 - 2026-11-08
 

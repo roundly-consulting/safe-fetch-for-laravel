@@ -601,6 +601,27 @@ it('tells a truncated response from a whole one', function (): void {
         ->and(app(SafeFetchManager::class)->truncated(new PsrResponse(200, ['safe-fetch-truncated' => '1'])))->toBeTrue();
 });
 
+it('never passes on a truncated mark the server sent', function (?int $cap): void {
+    Http::fake([
+        'hooks.example/start' => Http::response('', 307, ['Location' => '/whole', 'Safe-Fetch-Truncated' => '1']),
+        'hooks.example/whole' => Http::response('complete', 200, ['Safe-Fetch-Truncated' => '1']),
+        'hooks.example/big' => Http::response(str_repeat('x', 8192), 200, ['Safe-Fetch-Truncated' => '0']),
+    ]);
+    $policy = SafeFetch::policy()->maxResponseBytes($cap);
+
+    $whole = Http::safe($policy)->get('https://hooks.example/whole');
+    $followed = Http::safe($policy->followRedirects())->get('https://hooks.example/start');
+    $big = Http::safe($policy)->get('https://hooks.example/big');
+
+    expect($whole->body())->toBe('complete')
+        ->and(SafeFetch::truncated($whole))->toBeFalse()
+        ->and($whole->hasHeader('Safe-Fetch-Truncated'))->toBeFalse()
+        ->and($followed->body())->toBe('complete')
+        ->and(SafeFetch::truncated($followed))->toBeFalse()
+        ->and(SafeFetch::truncated($big))->toBe($cap !== null)
+        ->and($big->header('Safe-Fetch-Truncated'))->toBe($cap === null ? '' : '1');
+})->with(['no cap' => [null], 'a cap' => [4096]]);
+
 it('composes with middleware in either order', function (): void {
     Http::fake([
         'hooks.example/start' => Http::response('', 307, ['Location' => '/next']),
