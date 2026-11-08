@@ -24,7 +24,9 @@ Initial public release.
   host allowlist, blocked hosts, the app's own hosts, private-host exemptions (still resolved and
   pinned), allowed and blocked address ranges, and a response cap (`maxResponseBytes`) that cuts
   a body and marks it `Safe-Fetch-Truncated: 1`. `blockAppHosts()` switches the app-host block
-  on or off over whatever the configuration says.
+  on or off over whatever the configuration says. `withoutHostAllowlist()`,
+  `withoutPrivateHosts()` and `withoutAllowedRanges()` drop the host's carve-outs while keeping
+  its blocks — the start of a policy for another package's untrusted URLs.
 - Redirects, off by default: 307/308 at most three hops when on, every hop vetted and pinned
   again, no https to http, headers and credentials kept to the first origin, one time budget.
   `RedirectPolicy::methodPreserving($max, forwardHeaders: [...])` builds a followed policy that

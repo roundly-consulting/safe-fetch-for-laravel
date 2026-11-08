@@ -355,3 +355,57 @@ it('switches the app host block either way without touching the app hosts', func
         ->and($policy->blockAppHosts(false)->appHosts)->toBe(['me.example', '*.me.example'])
         ->and($policy->withoutAppHostBlock()->blockAppHosts()->appHosts)->toBe(['me.example', '*.me.example']);
 });
+
+it('clears the private hosts a host trusts', function (): void {
+    config()->set('safe-fetch.hosts.private', ['minio.internal', '*.svc.internal']);
+    SafeFetch::fakeDns(['minio.internal' => '10.0.0.7', 'a.svc.internal' => '10.0.0.8']);
+    $policy = SafeFetch::policy()->withoutPrivateHosts();
+
+    expect(SafeFetch::allows('https://minio.internal/'))->toBeTrue()
+        ->and($policy->privateHosts)->toBe([])
+        ->and(Helpers::refusal(fn () => SafeFetch::vet('https://minio.internal/', $policy))->reason())->toBe(Reason::Blocked)
+        ->and(blockedBy(fn () => SafeFetch::vet('https://minio.internal/', $policy)))->toBe('private_address')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://a.svc.internal/', $policy)))->toBe('private_address');
+});
+
+it('clears the allowed ranges a host trusts', function (): void {
+    config()->set('safe-fetch.ranges.allowed', ['127.0.0.1/32', '10.20.0.0/16']);
+    SafeFetch::fakeDns(['dev.example' => '127.0.0.1', 'svc.example' => '10.20.1.1']);
+    $policy = SafeFetch::policy()->withoutAllowedRanges();
+
+    expect(SafeFetch::allows('https://dev.example/'))->toBeTrue()
+        ->and(SafeFetch::allows('https://svc.example/'))->toBeTrue()
+        ->and($policy->allowedRanges)->toBe([])
+        ->and(blockedBy(fn () => SafeFetch::vet('https://dev.example/', $policy)))->toBe('private_address')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://svc.example/', $policy)))->toBe('private_address')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://127.0.0.1/', $policy)))->toBe('private_address');
+});
+
+it('lifts a host allowlist only when asked', function (): void {
+    config()->set('safe-fetch.hosts.allowed', ['media.example']);
+    SafeFetch::fakeDns(['media.example' => '93.184.216.34']);
+
+    expect(Helpers::refusal(fn () => SafeFetch::vet('https://public.example/'))->reason())->toBe(Reason::NotAllowed)
+        ->and(Helpers::refusal(fn () => SafeFetch::vet('https://public.example/', SafeFetch::policy()->blockHosts(['x.example'])))->reason())->toBe(Reason::NotAllowed)
+        ->and(SafeFetch::policy()->withoutHostAllowlist()->allowedHosts)->toBe([])
+        ->and(SafeFetch::vet('https://public.example/', SafeFetch::policy()->withoutHostAllowlist())->host)->toBe('public.example')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://inward.example/', SafeFetch::policy()->withoutHostAllowlist())))->toBe('private_address');
+});
+
+it('keeps inherited blocks when carve outs are cleared', function (): void {
+    config()->set('app.url', 'https://myapp.test');
+    config()->set('safe-fetch.hosts.blocked', ['evil.example']);
+    config()->set('safe-fetch.ranges.blocked', ['93.184.216.0/24']);
+    config()->set('safe-fetch.hosts.private', ['minio.internal']);
+    config()->set('safe-fetch.ranges.allowed', ['127.0.0.1/32']);
+    SafeFetch::fakeDns(['evil.example' => '151.101.1.1', 'myapp.test' => '151.101.1.2']);
+    $policy = SafeFetch::policy()->withoutHostAllowlist()->withoutPrivateHosts()->withoutAllowedRanges();
+
+    expect($policy->blockedHosts)->toBe(['evil.example'])
+        ->and($policy->blockedRanges)->toBe(['93.184.216.0/24'])
+        ->and($policy->appHosts)->toBe(['myapp.test'])
+        ->and($policy->blockAppHosts)->toBeTrue()
+        ->and(blockedBy(fn () => SafeFetch::vet('https://evil.example/', $policy)))->toBe('blocked_host')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://public.example/', $policy)))->toBe('blocked_range')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://myapp.test/', $policy)))->toBe('app_host');
+});

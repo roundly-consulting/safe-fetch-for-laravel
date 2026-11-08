@@ -16,6 +16,16 @@ use RoundlyConsulting\SafeFetch\Support\HostPattern;
  * Http::safe(SafeFetch::policy()->allowHosts(['hooks.example.com'])->followRedirects())->post($url, $payload);
  * ```
  *
+ * Building a policy for another package's untrusted URLs (tenant-supplied webhook endpoints),
+ * start from the configured one and drop the host's carve-outs, keeping its blocks:
+ *
+ * ```php
+ * SafeFetch::policy()->withoutHostAllowlist()->withoutPrivateHosts()->withoutAllowedRanges();
+ * ```
+ *
+ * Withers that tighten (block more, clear a carve-out) compose freely; anything that loosens is a
+ * call that says so.
+ *
  * Block beats allow: a blocked host or range is refused whatever else the policy says, and an
  * allowlisted host is still resolved, judged and pinned — it is only "may be asked for", never
  * "may be private". Host entries are exact names or `*.example.com` (subdomains only).
@@ -117,6 +127,12 @@ final readonly class DestinationPolicy
         return $this->with(allowedHosts: $hosts);
     }
 
+    /** Lift a strict host allowlist: any host may be asked for again (still vetted and pinned). */
+    public function withoutHostAllowlist(): self
+    {
+        return $this->with(allowedHosts: []);
+    }
+
     /**
      * Refuse these hosts by name, before any lookup (added to the list).
      *
@@ -137,6 +153,12 @@ final readonly class DestinationPolicy
         return $this->with(privateHosts: [...$this->privateHosts, ...$hosts]);
     }
 
+    /** Drop every private-host exemption: no name may resolve to a private address. */
+    public function withoutPrivateHosts(): self
+    {
+        return $this->with(privateHosts: []);
+    }
+
     /**
      * Exempt these addresses / CIDRs from the blocked-network table (added to the list).
      *
@@ -145,6 +167,12 @@ final readonly class DestinationPolicy
     public function allowRanges(array $ranges): self
     {
         return $this->with(allowedRanges: [...$this->allowedRanges, ...$ranges]);
+    }
+
+    /** Drop every allowed range: the whole blocked-network table applies again. */
+    public function withoutAllowedRanges(): self
+    {
+        return $this->with(allowedRanges: []);
     }
 
     /**
