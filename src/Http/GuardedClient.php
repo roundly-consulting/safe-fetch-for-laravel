@@ -65,7 +65,8 @@ final readonly class GuardedClient
      */
     public static function refuseHandler(array $options): void
     {
-        if (isset($options['handler'])) {
+        // Even null: Guzzle 8 drops it, but Guzzle 7 dies on it inside Guzzle with no word of why.
+        if (array_key_exists('handler', $options)) {
             throw UnsafeRequestOptions::option('handler', 'a handler replaces the handler stack the guard runs in.');
         }
     }

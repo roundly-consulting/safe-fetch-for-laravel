@@ -164,6 +164,17 @@ it('sends through the guarded client, which laravel still asks for', function ()
     Http::assertNothingSent();
 });
 
+it('refuses a handler option even when it is null', function (Closure $send): void {
+    // Guzzle 8 drops it; Guzzle 7 dies on it inside Guzzle. Either way it names the option.
+    Http::fake();
+
+    expect($send)->toThrow(UnsafeRequestOptions::class, '[handler]');
+    Http::assertNothingSent();
+})->with([
+    'after safe()' => [fn () => Http::safe()->withOptions(['handler' => null])->get('https://hooks.example/')],
+    'before safe()' => [fn () => Http::withOptions(['handler' => null])->safe()],
+]);
+
 it('lets the curl options that keep the connection where it is through', function (): void {
     $seen = [];
     Http::fake(function (Request $request, array $options) use (&$seen) {
