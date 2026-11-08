@@ -12,8 +12,7 @@ namespace RoundlyConsulting\SafeFetch\Support;
  * by the IPv4 address it carries.
  *
  * This table is a contract: `tests/Fixtures/contract/blocked-networks.json` holds it and its
- * vectors, byte-identical in the Node twin (safe-fetch-for-node), so both sides block the same
- * destinations. Change them together.
+ * vectors, and the contract tests run every vector against this class. Change them together.
  *
  * Pure and static — no configuration is read here. The policy (allowed and blocked ranges, private
  * hosts) is applied on top of it by the guard.

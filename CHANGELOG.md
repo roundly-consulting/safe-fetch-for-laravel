@@ -6,6 +6,10 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 
 ## Unreleased
 
+### Changed
+
+- Docblocks and the 1.0.0 entry reword how the contract fixture covers the blocked-network table.
+
 ## 1.0.1 - 2026-11-08
 
 ### Fixed
@@ -45,7 +49,7 @@ Initial public release.
   `fd00:ec2::254`, 100.100.100.200, 192.0.0.192, 168.63.129.16), carrier-grade NAT, multicast,
   documentation, benchmarking and reserved ranges; IPv6 that carries IPv4 (mapped, compatible,
   NAT64, translated, 6to4) judged by the IPv4 it carries, Teredo blocked; `localhost` and
-  `*.localhost` by name. Shared with the Node twin through one contract fixture.
+  `*.localhost` by name. Covered by the canonical contract fixture.
 - A policy (`DestinationPolicy`, `config/safe-fetch.php`): https only by default, ports, a strict
   host allowlist (`allowHosts()` replaces it and refuses an empty list, so a list that happens to
   be empty never opens the guard), blocked hosts, the app's own hosts (from `app.url`, read as

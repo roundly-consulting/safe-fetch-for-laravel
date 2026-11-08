@@ -7,9 +7,9 @@ namespace RoundlyConsulting\SafeFetch\Enums;
 use RoundlyConsulting\Enums\Helpers;
 
 /**
- * Why a URL was not fetched. The first seven are the vetting verdicts the shared contract fixture
- * (`tests/Fixtures/contract/blocked-networks.json`) and the Node twin use; the rest come from the
- * policy, from sending and from `SafeFetch::fetch()`.
+ * Why a URL was not fetched. The first seven are the vetting verdicts the contract fixture
+ * (`tests/Fixtures/contract/blocked-networks.json`) pins; the rest come from the policy, from
+ * sending and from `SafeFetch::fetch()`.
  */
 enum Reason: string
 {

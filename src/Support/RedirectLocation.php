@@ -11,7 +11,7 @@ use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 /**
  * Where a redirect leads: which statuses are followed and how a `Location` is resolved (RFC 3986
  * §5.2). The contract fixture (`tests/Fixtures/contract/blocked-networks.json`, `redirects`) pins
- * both for the Node twin too.
+ * both.
  *
  * The result is the next hop as the guard will judge it: an absolute `Location` comes back exactly
  * as the server wrote it, so the guard sees (and refuses) a numeric or malformed host instead of a

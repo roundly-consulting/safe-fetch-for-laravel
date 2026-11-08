@@ -16,10 +16,9 @@ use RoundlyConsulting\SafeFetch\Support\CappedSink;
 use RoundlyConsulting\SafeFetch\Support\CappedTransfer;
 
 /**
- * GET a URL into memory — `SafeFetch::fetch()`, the twin of the Node package's `fetchUrl`: guarded
- * like `Http::safe()`, its body cut off at a byte cap however the server sends it (counted after
- * decoding, so a compressed bomb stops too), and every failure an exception that says whether
- * trying again can help.
+ * GET a URL into memory — `SafeFetch::fetch()`: guarded like `Http::safe()`, its body cut off at
+ * a byte cap however the server sends it (counted after decoding, so a compressed bomb stops too),
+ * and every failure an exception that says whether trying again can help.
  *
  * Only a 2xx body is read. Any other answer is judged by its status and headers alone: the transfer
  * stops before its body, so a 503 with a huge error page stays a retryable 503.

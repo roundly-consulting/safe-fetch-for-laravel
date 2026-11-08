@@ -34,7 +34,7 @@ use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
  * 8. `invalid_url` — a backslash in the path, query or fragment (WHATWG parsers read it as `/`).
  *
  * The fragment is dropped. The scheme *policy* (https only by default) is the guard's, applied
- * after this. The contract fixture pins these verdicts for the Node twin too.
+ * after this. The contract fixture pins these verdicts.
  *
  * @internal
  */
