@@ -1,0 +1,144 @@
+name: run-tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest]
+        php: [8.4, 8.5, 8.6]
+        laravel: [13.*]
+        stability: [prefer-stable]
+        include:
+          - laravel: 13.*
+            testbench: 11.*
+
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, intl, fileinfo
+          coverage: xdebug
+
+      - name: Install dependencies
+        run: |
+          # Laravel's 13.x releases before 13.32 predate PHP 8.6 (their session handlers miss
+          # create_sid()), so a PHP 8.6 job resolves the framework from 13.32.
+          composer require --dev "laravel/framework:${{ matrix.php == 8.6 && '^13.32' || matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+
+      - name: List Installed Dependencies
+        run: composer show -D
+
+      - name: Execute tests
+        run: vendor/bin/pest --coverage --min=90
+
+  # Real-engine legs: uncomment when the package ships migrations.
+  # test-pgsql:
+  #   runs-on: ubuntu-latest
+  #   name: P8.4 - pgsql real-engine
+  #
+  #   steps:
+  #     # Started first so the engine boots while PHP installs. tmpfs + durability off: the same
+  #     # planner, isolation levels, locks and limits — nothing a test leg proves needs fsync.
+  #     - name: Start postgres
+  #       run: >-
+  #         docker run -d --name postgres --tmpfs /var/lib/postgresql/data
+  #         -e POSTGRES_DB=testing -e POSTGRES_USER=testing -e POSTGRES_PASSWORD=secret
+  #         -p 5432:5432 postgres:16
+  #         -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+  #
+  #     - name: Checkout code
+  #       uses: actions/checkout@v7
+  #
+  #     - name: Setup PHP
+  #       uses: shivammathur/setup-php@v2
+  #       with:
+  #         php-version: 8.4
+  #         extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, pgsql, pdo_pgsql, bcmath, intl, fileinfo
+  #         coverage: none
+  #
+  #     - name: Install dependencies
+  #       run: composer update --prefer-stable --prefer-dist --no-interaction
+  #
+  #     # The image's init server listens on the socket only, so a TCP answer means the real one is up.
+  #     - name: Wait for postgres
+  #       run: |
+  #         for _ in $(seq 1 90); do
+  #           docker exec postgres psql -h 127.0.0.1 -U testing -d testing -c 'select 1' >/dev/null 2>&1 && exit 0
+  #           sleep 1
+  #         done
+  #         docker logs postgres
+  #         exit 1
+  #
+  #     - name: Execute tests against postgres
+  #       env:
+  #         # TESTING_DB_DRIVER is what moves the suite off sqlite; the location vars alone only
+  #         # say where the engine is.
+  #         TESTING_DB_DRIVER: pgsql
+  #         TESTING_DB_HOST: 127.0.0.1
+  #         TESTING_DB_PORT: 5432
+  #         TESTING_DB_DATABASE: testing
+  #         TESTING_DB_USERNAME: testing
+  #         TESTING_DB_PASSWORD: secret
+  #       # Coverage is enforced on the sqlite matrix; this is a correctness leg. Parallel
+  #       # workers each get their own database (testing-for-laravel's DriverMatrix).
+  #       run: vendor/bin/pest --ci --parallel
+  #
+  # test-mysql:
+  #   runs-on: ubuntu-latest
+  #   name: P8.4 - mysql real-engine
+  #
+  #   steps:
+  #     # Started first, tmpfs datadir, binlog off and no flush per commit — the same InnoDB,
+  #     # isolation levels, locking and limits. performance_schema stays on: race tests read
+  #     # data_lock_waits.
+  #     - name: Start mysql
+  #       run: >-
+  #         docker run -d --name mysql --tmpfs /var/lib/mysql
+  #         -e MYSQL_DATABASE=testing -e MYSQL_ROOT_PASSWORD=secret
+  #         -p 3306:3306 mysql:8
+  #         --skip-log-bin --sync-binlog=0 --innodb-flush-log-at-trx-commit=0 --innodb-doublewrite=OFF
+  #
+  #     - name: Checkout code
+  #       uses: actions/checkout@v7
+  #
+  #     - name: Setup PHP
+  #       uses: shivammathur/setup-php@v2
+  #       with:
+  #         php-version: 8.4
+  #         extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, mysql, pdo_mysql, bcmath, intl, fileinfo
+  #         coverage: none
+  #
+  #     - name: Install dependencies
+  #       run: composer update --prefer-stable --prefer-dist --no-interaction
+  #
+  #     # The image's init server runs with networking off, so a TCP answer means the real one is up.
+  #     - name: Wait for mysql
+  #       run: |
+  #         for _ in $(seq 1 90); do
+  #           docker exec mysql mysql -h 127.0.0.1 -uroot -psecret -e 'select 1' testing >/dev/null 2>&1 && exit 0
+  #           sleep 1
+  #         done
+  #         docker logs mysql
+  #         exit 1
+  #
+  #     - name: Execute tests against mysql
+  #       env:
+  #         TESTING_DB_DRIVER: mysql
+  #         TESTING_DB_HOST: 127.0.0.1
+  #         TESTING_DB_PORT: 3306
+  #         TESTING_DB_DATABASE: testing
+  #         TESTING_DB_USERNAME: root
+  #         TESTING_DB_PASSWORD: secret
+  #       run: vendor/bin/pest --ci --parallel
