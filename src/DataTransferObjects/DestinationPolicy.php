@@ -167,10 +167,19 @@ final readonly class DestinationPolicy
         return $this->with(appHosts: [...$this->appHosts, ...$hosts]);
     }
 
-    /** Let requests reach the app's own host names. */
+    /**
+     * Refuse the app's own host names (`true`) or let requests reach them — either way, whatever
+     * the configuration said. The app hosts themselves are kept.
+     */
+    public function blockAppHosts(bool $block = true): self
+    {
+        return $this->with(blockAppHosts: $block);
+    }
+
+    /** Let requests reach the app's own host names: `blockAppHosts(false)`. */
     public function withoutAppHostBlock(): self
     {
-        return $this->with(blockAppHosts: false);
+        return $this->blockAppHosts(false);
     }
 
     public function redirects(RedirectPolicy $redirects): self

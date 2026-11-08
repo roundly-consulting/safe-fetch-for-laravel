@@ -23,7 +23,8 @@ Initial public release.
 - A policy (`DestinationPolicy`, `config/safe-fetch.php`): https only by default, ports, a strict
   host allowlist, blocked hosts, the app's own hosts, private-host exemptions (still resolved and
   pinned), allowed and blocked address ranges, and a response cap (`maxResponseBytes`) that cuts
-  a body and marks it `Safe-Fetch-Truncated: 1`.
+  a body and marks it `Safe-Fetch-Truncated: 1`. `blockAppHosts()` switches the app-host block
+  on or off over whatever the configuration says.
 - Redirects, off by default: 307/308 at most three hops when on, every hop vetted and pinned
   again, no https to http, headers and credentials kept to the first origin, one time budget.
   `RedirectPolicy::methodPreserving($max, forwardHeaders: [...])` builds a followed policy that

@@ -335,3 +335,23 @@ it('limits max in the wither', function (): void {
         ->and(fn () => $policy->max(-1))->toThrow(InvalidArgumentException::class, 'between 0 and 10')
         ->and(fn () => $policy->max(11))->toThrow(InvalidArgumentException::class, 'between 0 and 10');
 });
+
+it('turns the app host block back on', function (): void {
+    config()->set('app.url', 'https://myapp.test');
+    config()->set('safe-fetch.app_hosts.block', 'off');
+    SafeFetch::fakeDns(['myapp.test' => '93.184.216.34']);
+
+    expect(SafeFetch::allows('https://myapp.test/'))->toBeTrue()
+        ->and(blockedBy(fn () => SafeFetch::vet('https://myapp.test/', SafeFetch::policy()->blockAppHosts())))->toBe('app_host');
+});
+
+it('switches the app host block either way without touching the app hosts', function (): void {
+    $policy = (new DestinationPolicy)->appHosts(['me.example', '*.me.example']);
+
+    expect($policy->blockAppHosts)->toBeTrue()
+        ->and($policy->blockAppHosts(false)->blockAppHosts)->toBeFalse()
+        ->and($policy->blockAppHosts(false)->blockAppHosts()->blockAppHosts)->toBeTrue()
+        ->and($policy->withoutAppHostBlock()->blockAppHosts)->toBeFalse()
+        ->and($policy->blockAppHosts(false)->appHosts)->toBe(['me.example', '*.me.example'])
+        ->and($policy->withoutAppHostBlock()->blockAppHosts()->appHosts)->toBe(['me.example', '*.me.example']);
+});
