@@ -65,9 +65,9 @@ return [
         // Hops followed at most, 0–10.
         'max' => env('SAFE_FETCH_MAX_REDIRECTS', 3),
 
-        // null => 307 and 308 (method and body kept); SafeFetch::fetch(), which
-        // only sends GETs, follows 301, 302, 303, 307 and 308 then. Otherwise a
-        // subset of those five.
+        // null => 307 and 308 (method and body kept); SafeFetch::fetch() and
+        // SafeFetch::download(), which only send GETs, follow 301, 302, 303, 307
+        // and 308 then. Otherwise a subset of those five.
         'statuses' => null,
 
         // https -> http.
@@ -79,10 +79,11 @@ return [
     ],
 
     'fetch' => [
-        // SafeFetch::fetch() body cap in bytes, at least 1.
+        // SafeFetch::fetch() and download() body cap in bytes, at least 1.
         'max_bytes' => env('SAFE_FETCH_MAX_BYTES', 5_242_880),
 
-        // SafeFetch::fetch() time budget in seconds, 1–600, every hop included.
+        // SafeFetch::fetch() and download() time budget in seconds, 1–600, every
+        // hop included.
         'timeout' => env('SAFE_FETCH_TIMEOUT', 30),
     ],
 

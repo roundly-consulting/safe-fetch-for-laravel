@@ -45,7 +45,7 @@
         "roundly-consulting/testing-for-laravel": "^2.0"
     },
     "suggest": {
-        "ext-curl": "Required to send guarded requests: DNS pinning uses CURLOPT_RESOLVE. Without it vet() still judges URLs, but Http::safe() and fetch() refuse with cannot_pin.",
+        "ext-curl": "Required to send guarded requests: DNS pinning uses CURLOPT_RESOLVE. Without it vet(), allows() and precheck() still judge URLs, but Http::safe(), guard(), http(), fetch(), download() and VettedDestination::pinningOptions() refuse with cannot_pin.",
         "ext-intl": "International (IDN) host names; without it they are refused."
     },
     "autoload": {

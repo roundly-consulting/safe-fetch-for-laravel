@@ -10,6 +10,15 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 
 - Docblocks and the 1.0.0 entry reword how the contract fixture covers the blocked-network table.
 
+### Fixed
+
+- The `ext-curl` suggestion in `composer.json` lists everything that refuses with `cannot_pin`
+  without curl: `Http::safe()`, `guard()`, `http()`, `fetch()`, `download()` and
+  `VettedDestination::pinningOptions()`.
+- `config/safe-fetch.php`: `fetch.max_bytes` and `fetch.timeout` apply to `download()` as well as
+  `fetch()`, and `redirects.statuses` says `download()`, like `fetch()`, widens the default to all
+  five statuses.
+
 ## 1.0.1 - 2026-11-08
 
 ### Fixed
