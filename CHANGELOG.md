@@ -15,6 +15,9 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
   next hop, and returns the redirect unfollowed when the body cannot be rewound, as 307/308 already
   did. It used to send the next hop with an empty body (Guzzle 7) or fail with a connection error
   (Guzzle 8).
+- An `app.url` written as an address (`https://52.10.20.30`) is now refused as `app_host` while
+  `app_hosts.block` is on, in any written form (`[::ffff:52.10.20.30]`); it used to be refused only
+  when the address was private. The policy carries it as `DestinationPolicy::$appAddresses`.
 
 ## 1.0.0 - 2026-11-08
 

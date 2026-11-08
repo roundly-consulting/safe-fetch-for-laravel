@@ -18,7 +18,8 @@ use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
  * 1. canonicalise ({@see UrlCanonicaliser});
  * 2. `scheme` — not one the policy allows (https only by default);
  * 3. `port` — not one the policy allows (when it lists any);
- * 4. name rules: a blocked host → `blocked` (`blocked_host`); one of the app's own hosts →
+ * 4. name rules: a blocked host → `blocked` (`blocked_host`); one of the app's own hosts, or an
+ *    address literal that is the app's own address (`app.url` written as one) →
  *    `blocked` (`app_host`); not on a strict allowlist → `not_allowed` (an address literal never is
  *    on it); `localhost` / `*.localhost` not listed as a private host → `blocked` (`hostname`);
  * 5. resolve the name **once**; no address → `unresolved`;
@@ -66,6 +67,8 @@ final readonly class DestinationGuard
             if ($policy->blockAppHosts && HostPattern::matches($host, $policy->appHosts)) {
                 throw DestinationRejected::because(Reason::Blocked, $url, $host, 'app_host');
             }
+        } elseif ($policy->blockAppHosts && self::isAppAddress($host, $policy)) {
+            throw DestinationRejected::because(Reason::Blocked, $url, $host, 'app_host');
         }
 
         // A strict allowlist names hosts, so an address literal is never on it: "only these hosts"
@@ -144,6 +147,18 @@ final readonly class DestinationGuard
         }
 
         return $address;
+    }
+
+    /** Whether an address literal is one of the app's own addresses, however it is written (`::ffff:` included). */
+    private static function isAppAddress(string $address, DestinationPolicy $policy): bool
+    {
+        foreach ($policy->appAddresses as $appAddress) {
+            if (AddressRanges::same($address, $appAddress)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function isPrivateHost(string $host, DestinationPolicy $policy): bool

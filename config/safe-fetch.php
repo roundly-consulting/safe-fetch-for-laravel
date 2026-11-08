@@ -50,8 +50,9 @@ return [
         'blocked' => [],
     ],
 
-    // The app's own host names (app.url's host + extra) are refused by name: a
-    // request to yourself through a public load balancer is SSRF too.
+    // The app's own host names (app.url's host + extra) are refused by name, and
+    // app.url's address when it is written as one: a request to yourself through
+    // a public load balancer is SSRF too.
     'app_hosts' => [
         'block' => true,
         'extra' => [],

@@ -123,6 +123,32 @@ it('reads an app url written without a scheme', function (string $url): void {
         ->and(blockedBy(fn () => SafeFetch::vet('https://myapp.example/admin')))->toBe('app_host');
 })->with(['myapp.example', 'MyApp.example:8080', '//myapp.example', ' myapp.example/app ', 'https://myapp.example']);
 
+it('refuses the apps own address', function (string $url, string $address, string $asked): void {
+    config()->set('app.url', $url);
+
+    expect(blockedBy(fn () => SafeFetch::vet($asked)))->toBe('app_host')
+        ->and(blockedBy(fn () => SafeFetch::precheck($asked)))->toBe('app_host')
+        ->and(SafeFetch::policy()->appAddresses)->toBe([$address])
+        ->and(SafeFetch::policy()->ports([443])->maxResponseBytes(4096)->blockHosts(['x.example'])->appAddresses)->toBe([$address])
+        ->and(SafeFetch::policy()->appHosts)->toBe([]);
+})->with([
+    'ipv4' => ['https://52.10.20.30', '52.10.20.30', 'https://52.10.20.30/admin'],
+    'ipv4 as mapped ipv6' => ['https://52.10.20.30', '52.10.20.30', 'https://[::ffff:52.10.20.30]/admin'],
+    'ipv4 without a scheme' => ['52.10.20.30:8080', '52.10.20.30', 'https://52.10.20.30/'],
+    'ipv6' => ['https://[2600:1F18::1]', '2600:1f18::1', 'https://[2600:1f18::1]/admin'],
+]);
+
+it('lets requests reach the apps own address when the app host block is off', function (): void {
+    config()->set('app.url', 'https://52.10.20.30');
+
+    expect(SafeFetch::allows('https://52.10.20.30/', SafeFetch::policy()->withoutAppHostBlock()))->toBeTrue()
+        ->and(SafeFetch::allows('https://52.10.20.31/'))->toBeTrue();
+
+    config()->set('safe-fetch.app_hosts.block', 'off');
+
+    expect(SafeFetch::vet('https://52.10.20.30/admin')->addresses)->toBe(['52.10.20.30']);
+});
+
 it('ignores an app url it cannot read', function (mixed $url): void {
     config()->set('app.url', $url);
 
@@ -308,6 +334,9 @@ it('refuses a policy it could not apply as written', function (Closure $build, s
     'address as host' => [fn () => new DestinationPolicy(privateHosts: ['10.0.0.1']), 'is an address'],
     'range' => [fn () => new DestinationPolicy(allowedRanges: ['10.0.0.0/40']), 'not an address'],
     'range type' => [fn () => new DestinationPolicy(blockedRanges: [false]), 'not an address'],
+    'app address' => [fn () => new DestinationPolicy(appAddresses: ['myapp.example']), 'not an address'],
+    'app address range' => [fn () => new DestinationPolicy(appAddresses: ['10.0.0.0/8']), 'not an address'],
+    'app address type' => [fn () => new DestinationPolicy(appAddresses: [42]), 'not an address'],
     'everything v4' => [fn () => new DestinationPolicy(allowedRanges: ['0.0.0.0/0']), 'switch the guard off'],
     'everything v6' => [fn () => (new DestinationPolicy)->allowRanges(['::/0']), 'switch the guard off'],
     // IPv6 forms that carry every IPv4 address are 0.0.0.0/0 under another name.

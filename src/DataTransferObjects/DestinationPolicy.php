@@ -56,6 +56,9 @@ final readonly class DestinationPolicy
     /** @var list<string> */
     public array $appHosts;
 
+    /** @var list<string> */
+    public array $appAddresses;
+
     /**
      * @param  list<string>  $schemes  `https`, and `http` when allowed
      * @param  list<int>|null  $ports  null: any port
@@ -66,6 +69,7 @@ final readonly class DestinationPolicy
      * @param  list<string>  $blockedRanges  addresses / CIDRs always refused
      * @param  list<string>  $appHosts  the app's own host names
      * @param  int|null  $maxResponseBytes  `Http::safe()` only: cut a response body at this many bytes
+     * @param  list<string>  $appAddresses  the app's own addresses (`app.url` written as one), refused like its host names
      *
      * @throws InvalidArgumentException for any value the guard could not apply as written
      */
@@ -81,6 +85,7 @@ final readonly class DestinationPolicy
         array $appHosts = [],
         public RedirectPolicy $redirects = new RedirectPolicy,
         public ?int $maxResponseBytes = null,
+        array $appAddresses = [],
     ) {
         $this->schemes = self::validSchemes($schemes);
         $this->ports = $ports === null ? null : self::validPorts($ports);
@@ -90,6 +95,7 @@ final readonly class DestinationPolicy
         $this->allowedRanges = self::validRanges($allowedRanges, allowed: true);
         $this->blockedRanges = self::validRanges($blockedRanges, allowed: false);
         $this->appHosts = self::validHosts($appHosts);
+        $this->appAddresses = self::validAddresses($appAddresses);
 
         if ($maxResponseBytes !== null && $maxResponseBytes < 1) {
             throw new InvalidArgumentException("A response cap must be at least 1 byte, [{$maxResponseBytes}] given.");
@@ -114,7 +120,7 @@ final readonly class DestinationPolicy
      */
     public function ports(?array $ports): self
     {
-        return new self($this->schemes, $ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes);
+        return new self($this->schemes, $ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses);
     }
 
     /**
@@ -236,7 +242,7 @@ final readonly class DestinationPolicy
      */
     public function maxResponseBytes(?int $bytes): self
     {
-        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $bytes);
+        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $bytes, $this->appAddresses);
     }
 
     /**
@@ -271,6 +277,7 @@ final readonly class DestinationPolicy
             $appHosts ?? $this->appHosts,
             $redirects ?? $this->redirects,
             $this->maxResponseBytes,
+            $this->appAddresses,
         );
     }
 
@@ -346,6 +353,32 @@ final readonly class DestinationPolicy
         }
 
         return array_values($patterns);
+    }
+
+    /**
+     * Addresses in their normal form (`2600:1F18:0::1` is `2600:1f18::1`).
+     *
+     * @param  array<mixed>  $addresses
+     * @return list<string>
+     */
+    private static function validAddresses(array $addresses): array
+    {
+        $valid = [];
+
+        foreach ($addresses as $address) {
+            $bytes = is_string($address) ? AddressRanges::bytes(trim($address)) : null;
+
+            if ($bytes === null) {
+                $shown = is_scalar($address) ? (string) $address : get_debug_type($address);
+
+                throw new InvalidArgumentException("[{$shown}] is not an address.");
+            }
+
+            $address = (string) inet_ntop($bytes);
+            $valid[$address] = $address;
+        }
+
+        return array_values($valid);
     }
 
     /**

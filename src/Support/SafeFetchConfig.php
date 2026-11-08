@@ -33,6 +33,7 @@ final class SafeFetchConfig
             blockAppHosts: Config::boolean('safe-fetch.app_hosts.block', true),
             appHosts: [...self::appUrlHost(), ...Config::list('safe-fetch.app_hosts.extra', [], HostPattern::isValid(...))],
             redirects: self::redirects(),
+            appAddresses: self::appUrlAddress(),
         );
     }
 
@@ -77,7 +78,8 @@ final class SafeFetchConfig
     }
 
     /**
-     * The host of `app.url` — the app's own name — or nothing when it has none the guard can read.
+     * The host of `app.url` — the app's own name — or nothing when it has none the guard can read
+     * or is an address ({@see self::appUrlAddress()}).
      *
      * @return list<string>
      */
@@ -89,8 +91,21 @@ final class SafeFetchConfig
     }
 
     /**
+     * The address `app.url` is written as (`https://52.10.20.30`) — the app's own address, refused
+     * like its host name — or nothing when it names a host or none the guard can read.
+     *
+     * @return list<string>
+     */
+    private static function appUrlAddress(): array
+    {
+        $canonical = self::appUrl();
+
+        return $canonical !== null && $canonical->ipLiteral ? [$canonical->host] : [];
+    }
+
+    /**
      * Whether `app.url` is set but names no host the guard can read — so the app-host block refuses
-     * nothing for it. An address (`http://127.0.0.1:8000`) is read: the address table judges it.
+     * nothing for it. An address (`https://52.10.20.30`) is read: the app-host block refuses it.
      */
     public static function appUrlUnreadable(): bool
     {
