@@ -33,6 +33,27 @@ if ($path === '/echo') {
 if ($path === '/redirect') {
     header('Location: '.($_GET['to'] ?? '/hello.txt'), true, (int) ($_GET['status'] ?? 307));
 
+    // A redirect with a body of its own, which must never reach the caller's sink.
+    if (isset($_GET['body'])) {
+        header('Content-Type: text/plain');
+        echo str_repeat((string) $_GET['body'], 4096);
+    }
+
+    return;
+}
+
+if ($path === '/large') {
+    // `bytes` bytes, chunked (no Content-Length).
+    header('Content-Type: application/octet-stream');
+    $left = (int) ($_GET['bytes'] ?? 0);
+    $chunk = str_repeat('z', 65536);
+
+    while ($left > 0 && ! connection_aborted()) {
+        echo substr($chunk, 0, min($left, 65536));
+        $left -= 65536;
+        flush();
+    }
+
     return;
 }
 

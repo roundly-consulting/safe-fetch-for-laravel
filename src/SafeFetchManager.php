@@ -9,12 +9,14 @@ use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Psr\Http\Message\ResponseInterface;
+use RoundlyConsulting\SafeFetch\Actions\DownloadUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\FetchUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\GuardRequestAction;
 use RoundlyConsulting\SafeFetch\Actions\PrecheckDestinationAction;
 use RoundlyConsulting\SafeFetch\Actions\VetDestinationAction;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\CanonicalUrl;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\DownloadedFile;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchedResponse;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchOptions;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
@@ -116,6 +118,35 @@ class SafeFetchManager
     ): FetchedResponse {
         return $this->container->make(FetchUrlAction::class)->execute(
             $url,
+            new FetchOptions($maxBytes, $timeout, $accept, $headers, $followRedirects),
+            $policy ?? $this->policy(),
+        );
+    }
+
+    /**
+     * GET `$url` into the file at `$path`, guarded, its body streamed to disk and capped at
+     * `$maxBytes` — `fetch()` for files too large to hold in memory. The directory must exist; on
+     * any failure the file is deleted.
+     *
+     * @param  array<string, string>  $headers
+     *
+     * @throws DestinationRejected
+     * @throws DestinationUnavailable
+     * @throws FetchFailed
+     */
+    public function download(
+        string $url,
+        string $path,
+        ?int $maxBytes = null,
+        ?int $timeout = null,
+        ?string $accept = null,
+        array $headers = [],
+        ?bool $followRedirects = null,
+        ?DestinationPolicy $policy = null,
+    ): DownloadedFile {
+        return $this->container->make(DownloadUrlAction::class)->execute(
+            $url,
+            $path,
             new FetchOptions($maxBytes, $timeout, $accept, $headers, $followRedirects),
             $policy ?? $this->policy(),
         );

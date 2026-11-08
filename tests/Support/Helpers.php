@@ -7,6 +7,7 @@ namespace RoundlyConsulting\SafeFetch\Tests\Support;
 use Closure;
 use RoundlyConsulting\SafeFetch\Exceptions\SafeFetchException;
 use RuntimeException;
+use Throwable;
 
 final class Helpers
 {
@@ -16,6 +17,18 @@ final class Helpers
         try {
             $call();
         } catch (SafeFetchException $exception) {
+            return $exception;
+        }
+
+        throw new RuntimeException('Nothing was thrown.');
+    }
+
+    /** Whatever a call throws. */
+    public static function thrown(Closure $call): Throwable
+    {
+        try {
+            $call();
+        } catch (Throwable $exception) {
             return $exception;
         }
 

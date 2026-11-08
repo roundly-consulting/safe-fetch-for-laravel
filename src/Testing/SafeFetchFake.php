@@ -9,6 +9,7 @@ use Illuminate\Contracts\Container\Container;
 use PHPUnit\Framework\Assert as PHPUnit;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\CanonicalUrl;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\DownloadedFile;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchedResponse;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
@@ -21,7 +22,7 @@ use RoundlyConsulting\SafeFetch\Support\UrlCanonicaliser;
  * The manager `SafeFetch::fake()` installs. It keeps the **real** guard — a private address is
  * still refused — answers DNS from a table (unknown names resolve to the public `93.184.216.34`
  * unless {@see self::strictDns()}), and records every verdict: `vet()`, `allows()`, `precheck()`,
- * each hop of a guarded request (`via: http`) and every `fetch()`.
+ * each hop of a guarded request (`via: http`) and every `fetch()` and `download()`.
  *
  * Requests still go through Laravel's HTTP client: answer them with `Http::fake()`. One that
  * reaches the network is refused before dialling (a test that forgot `Http::fake()` would
@@ -34,6 +35,9 @@ final class SafeFetchFake extends SafeFetchManager
 
     /** @var list<string> */
     private array $fetches = [];
+
+    /** @var list<string> */
+    private array $downloads = [];
 
     private FakeHostResolver $dns;
 
@@ -117,6 +121,21 @@ final class SafeFetchFake extends SafeFetchManager
         return parent::fetch($url, $maxBytes, $timeout, $accept, $headers, $followRedirects, $policy);
     }
 
+    public function download(
+        string $url,
+        string $path,
+        ?int $maxBytes = null,
+        ?int $timeout = null,
+        ?string $accept = null,
+        array $headers = [],
+        ?bool $followRedirects = null,
+        ?DestinationPolicy $policy = null,
+    ): DownloadedFile {
+        $this->downloads[] = $url;
+
+        return parent::download($url, $path, $maxBytes, $timeout, $accept, $headers, $followRedirects, $policy);
+    }
+
     /**
      * Every verdict so far, in order.
      *
@@ -175,6 +194,27 @@ final class SafeFetchFake extends SafeFetchManager
             : "Expected [{$url}] to be fetched, but it was not.");
     }
 
+    /**
+     * `download()` was called for `$url` — or with a URL the callback accepts.
+     *
+     * @param  string|(Closure(string): bool)  $url
+     */
+    public function assertDownloaded(string|Closure $url): void
+    {
+        $matches = array_filter($this->downloads, $url instanceof Closure ? $url : fn (string $downloaded): bool => $this->sameUrl($downloaded, $url));
+
+        PHPUnit::assertNotEmpty($matches, $url instanceof Closure
+            ? 'Expected a URL matching the callback to be downloaded, but none was.'
+            : "Expected [{$url}] to be downloaded, but it was not.");
+    }
+
+    public function assertNothingDownloaded(): void
+    {
+        $count = count($this->downloads);
+
+        PHPUnit::assertSame(0, $count, "Expected nothing to be downloaded, but {$count} URL(s) were: ".implode(', ', $this->downloads).'.');
+    }
+
     public function assertNothingFetched(): void
     {
         $count = count($this->fetches);
@@ -200,7 +240,7 @@ final class SafeFetchFake extends SafeFetchManager
     }
 
     /**
-     * A guarded request (`Http::safe()`, `guard()`, `http()`, `fetch()`) passed the guard on at
+     * A guarded request (`Http::safe()`, `guard()`, `http()`, `fetch()`, `download()`) passed the guard on at
      * least one hop — one whose vetted destination the callback accepts, when given.
      *
      * @param  (Closure(VettedDestination): bool)|null  $callback

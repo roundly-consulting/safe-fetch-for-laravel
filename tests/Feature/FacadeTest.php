@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Http;
+use RoundlyConsulting\SafeFetch\Actions\DownloadUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\FetchUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\GuardRequestAction;
 use RoundlyConsulting\SafeFetch\Actions\PrecheckDestinationAction;
@@ -41,11 +42,15 @@ it('runs every facade method', function (): void {
         ->and(SafeFetch::http()->get('https://hooks.example/b')->body())->toBe('ok')
         ->and(SafeFetch::guard(Http::withToken('t'))->get('https://hooks.example/c')->body())->toBe('ok')
         ->and(SafeFetch::fetch('https://hooks.example/d')->body)->toBe('ok')
+        ->and(SafeFetch::download('https://hooks.example/e', $path = tempnam(sys_get_temp_dir(), 'safe-fetch-facade-'))->bytes)->toBe(2)
+        ->and(file_get_contents($path))->toBe('ok')
+        ->and(SafeFetch::truncated(SafeFetch::http()->get('https://hooks.example/f')))->toBeFalse()
         ->and(SafeFetch::policy())->toBeInstanceOf(DestinationPolicy::class)
         ->and(SafeFetch::networks())->toBeInstanceOf(Networks::class)
         ->and(SafeFetch::urls())->toBeInstanceOf(Urls::class);
 
     Http::assertSent(static fn ($request): bool => $request->url() === 'https://hooks.example/c' && $request->hasHeader('Authorization', 'Bearer t'));
+    unlink($path);
 });
 
 it('runs the same api through an injected manager', function (): void {
@@ -56,7 +61,10 @@ it('runs the same api through an injected manager', function (): void {
         ->and($manager->vet('https://hooks.example/')->addresses)->toBe(['93.184.216.34'])
         ->and($manager->precheck('https://hooks.example/z')->toString())->toBe('https://hooks.example/z')
         ->and($manager->http()->get('https://hooks.example/x')->body())->toBe('ok')
-        ->and($manager->fetch('https://hooks.example/y')->status)->toBe(200);
+        ->and($manager->fetch('https://hooks.example/y')->status)->toBe(200)
+        ->and($manager->download('https://hooks.example/w', $path = tempnam(sys_get_temp_dir(), 'safe-fetch-di-'))->status)->toBe(200);
+
+    unlink($path);
 });
 
 it('runs the raw actions', function (): void {
@@ -65,7 +73,10 @@ it('runs the raw actions', function (): void {
     expect(app(VetDestinationAction::class)->execute('https://hooks.example/', SafeFetch::policy())->host)->toBe('hooks.example')
         ->and(app(PrecheckDestinationAction::class)->execute('https://hooks.example/q', SafeFetch::policy())->pathAndQuery)->toBe('/q')
         ->and(app(GuardRequestAction::class)->execute(Http::withToken('t'), SafeFetch::policy())->post('https://hooks.example/p')->body())->toBe('ok')
-        ->and(app(FetchUrlAction::class)->execute('https://hooks.example/f', new FetchOptions, SafeFetch::policy())->body)->toBe('ok');
+        ->and(app(FetchUrlAction::class)->execute('https://hooks.example/f', new FetchOptions, SafeFetch::policy())->body)->toBe('ok')
+        ->and(app(DownloadUrlAction::class)->execute('https://hooks.example/g', $path = tempnam(sys_get_temp_dir(), 'safe-fetch-action-'), new FetchOptions(maxBytes: 10), SafeFetch::policy())->bytes)->toBe(2);
+
+    unlink($path);
 });
 
 it('resolves actions through the container so a host override applies', function (): void {

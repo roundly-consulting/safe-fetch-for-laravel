@@ -94,3 +94,25 @@ it('keeps the verdict distinguishable for code', function (): void {
         ->and($unresolved->retryable())->toBeTrue()
         ->and($blocked->blockedBy())->toBe('private_address');
 });
+
+it('writes a capped sink to a file it reopens by path', function (): void {
+    $path = tempnam(sys_get_temp_dir(), 'safe-fetch-sink-');
+    file_put_contents($path, 'stale content');
+
+    try {
+        $sink = CappedSink::toFile($path, 4);
+
+        expect(fwrite($sink->resource, 'abcdef'))->toBe(4)
+            ->and($sink->exceeded)->toBeTrue();
+
+        $sink->flush();
+
+        expect(file_get_contents($path))->toBe('abcd')
+            ->and(CappedSink::toFile($path, 4)->written)->toBe(0)
+            ->and(file_get_contents($path))->toBe('')
+            ->and(fn () => CappedSink::toFile(sys_get_temp_dir().'/safe-fetch-missing-'.bin2hex(random_bytes(4)).'/x', 4))
+            ->toThrow(RuntimeException::class, 'could not be opened');
+    } finally {
+        @unlink($path);
+    }
+});

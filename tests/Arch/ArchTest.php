@@ -37,7 +37,7 @@ it('the rule, the middleware, the command and the handles go through the manager
         $offenders += SourceTokens::uses($callers, $action);
     }
 
-    expect($actions)->toHaveCount(4)
+    expect($actions)->toHaveCount(5)
         ->and(array_keys($callers))->toContain('Rules/SafeUrl.php', 'Http/GuardMiddleware.php', 'Commands/CheckCommand.php', 'Handles/Urls.php')
         ->and($offenders)->toBe([]);
 });

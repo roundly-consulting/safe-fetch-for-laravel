@@ -7,8 +7,9 @@ namespace RoundlyConsulting\SafeFetch\Support;
 use RuntimeException;
 
 /**
- * A response body kept in memory (`php://temp`) through a byte budget: a write past `maxBytes`
- * stores what still fits and reports a short write count, never an error.
+ * A response body kept in memory (`php://temp`) — or in a file, {@see self::toFile()} — through a
+ * byte budget: a write past `maxBytes` stores what still fits and reports a short write count,
+ * never an error.
  *
  * That count is the point. As a transfer's sink, a short write is what makes curl abort the
  * transfer at once — however the server sends the body (no Content-Length, chunked, lying about
@@ -26,7 +27,7 @@ final class CappedSink
     /** @var resource the handle Guzzle writes to (a {@see CappedSinkStream}) */
     public readonly mixed $resource;
 
-    /** @var resource the memory the body lands in */
+    /** @var resource the memory (or file) the body lands in */
     public readonly mixed $memory;
 
     /**
@@ -49,6 +50,21 @@ final class CappedSink
         }
 
         return new self($maxBytes, $memory);
+    }
+
+    /**
+     * A sink writing to the file at `$path`, which it creates or empties. Opened by path every time —
+     * never a reused handle: Guzzle closes the sink of a transfer it aborted.
+     */
+    public static function toFile(string $path, int $maxBytes): self
+    {
+        $file = @fopen($path, 'w+b');
+
+        if ($file === false) {
+            throw new RuntimeException('The download file could not be opened.');
+        }
+
+        return new self($maxBytes, $file);
     }
 
     /** Write `$data` through the budget; returns how many bytes were kept. */
@@ -78,6 +94,12 @@ final class CappedSink
         rewind($this->memory);
         $this->written = 0;
         $this->exceeded = false;
+    }
+
+    /** Push what was kept to the file, so a reader by path sees all of it. */
+    public function flush(): void
+    {
+        fflush($this->memory);
     }
 
     /** Everything kept so far. */

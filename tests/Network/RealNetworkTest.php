@@ -336,6 +336,53 @@ it('leaves a real body under the cap untouched', function (): void {
         ->and($response->hasHeader('Safe-Fetch-Truncated'))->toBeFalse();
 });
 
+it('streams a real download to disk under the cap', function (): void {
+    $path = tempnam(sys_get_temp_dir(), 'safe-fetch-real-download-');
+    $bytes = 20 * 1048576;
+
+    try {
+        // Warm up first: loading and compiling classes costs memory once, whatever the body.
+        SafeFetch::download($this->server->url('pin.invalid', '/large?bytes=65536'), $path, policy: networkPolicy());
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+        $file = SafeFetch::download($this->server->url('pin.invalid', "/large?bytes={$bytes}"), $path, maxBytes: 25 * 1048576, timeout: 60, policy: networkPolicy());
+        $peak = memory_get_peak_usage() - $before;
+
+        expect($file->bytes)->toBe($bytes)
+            ->and(filesize($path))->toBe($bytes)
+            ->and($file->contentType)->toBe('application/octet-stream')
+            ->and($peak)->toBeLessThan(2 * 1048576);
+    } finally {
+        @unlink($path);
+    }
+});
+
+it('stops a real endless download at the cap', function (): void {
+    $path = sys_get_temp_dir().'/safe-fetch-endless-'.bin2hex(random_bytes(4));
+    $started = microtime(true);
+
+    $refusal = Helpers::refusal(fn () => SafeFetch::download($this->server->url('pin.invalid', '/endless'), $path, maxBytes: 100_000, timeout: 20, policy: networkPolicy()));
+
+    expect($refusal)->toBeInstanceOf(FetchFailed::class)
+        ->and($refusal->reason())->toBe(Reason::TooLarge)
+        ->and(file_exists($path))->toBeFalse()
+        ->and(microtime(true) - $started)->toBeLessThan(10.0);
+});
+
+it('starts a fresh file on every real hop', function (int $status): void {
+    $path = tempnam(sys_get_temp_dir(), 'safe-fetch-real-hop-');
+
+    try {
+        $file = SafeFetch::download($this->server->url('pin.invalid', "/redirect?status={$status}&body=r&to=/hello.txt"), $path, followRedirects: true, policy: networkPolicy());
+
+        expect(file_get_contents($path))->toBe('hello from the pinned server')
+            ->and($file->bytes)->toBe(28)
+            ->and($file->url)->toBe($this->server->url('pin.invalid', '/hello.txt'));
+    } finally {
+        @unlink($path);
+    }
+})->with([302, 307]);
+
 it('network tests cannot be skipped on ci', function (): void {
     expect(Network::missing(ipv6: true))->toBeNull();
 

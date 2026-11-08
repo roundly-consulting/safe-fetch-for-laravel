@@ -14,6 +14,7 @@ $core = [
     'src/Support/HostPattern.php',
     'src/Support/AddressRanges.php',
     'src/Http/GuardMiddleware.php',
+    'src/Support/CappedTransfer.php',
 ];
 
 $clover = simplexml_load_file($argv[1] ?? 'build/clover.xml');
