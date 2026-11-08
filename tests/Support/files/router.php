@@ -30,8 +30,19 @@ if ($path === '/echo') {
     return;
 }
 
+if ($path === '/cookies') {
+    header('Content-Type: text/plain');
+    echo 'cookie='.($_SERVER['HTTP_COOKIE'] ?? '');
+
+    return;
+}
+
 if ($path === '/redirect') {
     header('Location: '.($_GET['to'] ?? '/hello.txt'), true, (int) ($_GET['status'] ?? 307));
+
+    if (isset($_GET['cookie'])) {
+        header('Set-Cookie: '.$_GET['cookie']);
+    }
 
     // A redirect with a body of its own, which must never reach the caller's sink.
     if (isset($_GET['body'])) {

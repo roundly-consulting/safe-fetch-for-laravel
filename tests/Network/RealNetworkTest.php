@@ -141,6 +141,14 @@ it('follows a real 307 with its body', function (): void {
         ->and($this->server->requests()[1])->toStartWith('POST /echo body=payload');
 });
 
+it('sends a cookie a real redirect set to the next hop', function (): void {
+    $response = Http::safe(networkPolicy()->followRedirects())
+        ->get($this->server->url('pin.invalid', '/redirect?to=/cookies&cookie='.urlencode('session=abc; Path=/')));
+
+    expect($response->body())->toBe('cookie=session=abc')
+        ->and($response->cookies()->getCookieByName('session')?->getDomain())->toBe('pin.invalid');
+});
+
 it('streams through the pinned curl handler', function (): void {
     $response = Http::safe(networkPolicy())->withOptions(['stream' => true])->get($this->server->url('pin.invalid', '/big'));
     $body = $response->toPsrResponse()->getBody();

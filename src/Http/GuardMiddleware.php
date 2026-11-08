@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\SafeFetch\Http;
 
 use Closure;
+use GuzzleHttp\Cookie\CookieJarInterface;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Promise\PromiseInterface;
 use GuzzleHttp\Psr7\Uri;
@@ -50,6 +51,9 @@ final readonly class GuardMiddleware
     ];
 
     public const string TRUNCATED_HEADER = SafeFetchManager::TRUNCATED_HEADER;
+
+    /** The option the guarded client hands the request's cookie jar over in. */
+    public const string COOKIES = 'safe_fetch.cookies';
 
     public function __construct(
         private SafeFetchManager $manager,
@@ -179,6 +183,12 @@ final readonly class GuardMiddleware
             [$request, $options] = $this->withoutCredentials($request, $options);
         }
 
+        // Cookies per hop, as Guzzle's redirects send them: the jar's for this URL, stored from
+        // this hop's own answer.
+        $jar = $options[self::COOKIES] ?? null;
+        $jar = $jar instanceof CookieJarInterface ? $jar : null;
+        $request = $jar?->withCookieHeader($request) ?? $request;
+
         $remaining = $deadline === null ? null : $deadline - $this->clock->now();
 
         // Under a millisecond is spent: curl reads its timeout in whole milliseconds, and 0 as none.
@@ -193,7 +203,12 @@ final readonly class GuardMiddleware
         $head = null;
 
         $hopOptions = $options;
-        unset($hopOptions['safe_fetch.before_hop']);
+        unset($hopOptions['safe_fetch.before_hop'], $hopOptions[self::COOKIES]);
+
+        if ($jar !== null) {
+            // Laravel's own bookkeeping reads the jar here (`Response::cookies()`).
+            $hopOptions['cookies'] = $jar;
+        }
         $hopOptions['safe_fetch.via'] = self::via($options);
 
         if ($n > 0) {
@@ -263,12 +278,14 @@ final readonly class GuardMiddleware
         }
 
         return $handler($request, $hopOptions)->then(
-            function (ResponseInterface $response) use (&$stats, $handler, $request, $options, $n, $deadline, $firstOrigin, $vetted, $sink): PromiseInterface {
+            function (ResponseInterface $response) use (&$stats, $handler, $request, $options, $n, $deadline, $firstOrigin, $vetted, $sink, $jar): PromiseInterface {
                 if ($stats instanceof TransferStats && ! self::stubbed($stats) && ! self::connectedInside($stats, $vetted)) {
                     $response->getBody()->close();
 
                     return $this->refusePin($vetted, $options);
                 }
+
+                $jar?->extractCookies($request, $response);
 
                 if ($this->follows($response, $request)) {
                     return $this->follow($handler, $response, $request, $options, $n, $deadline, $firstOrigin, $vetted);
@@ -276,9 +293,13 @@ final readonly class GuardMiddleware
 
                 return Create::promiseFor($this->capped($response, $sink));
             },
-            function (mixed $reason) use (&$stats, &$redirect, &$head, $check, $handler, $request, $options, $n, $deadline, $firstOrigin, $vetted, $sink): PromiseInterface {
+            function (mixed $reason) use (&$stats, &$redirect, &$head, $check, $handler, $request, $options, $n, $deadline, $firstOrigin, $vetted, $sink, $jar): PromiseInterface {
                 if ($check?->refused === true || ($stats instanceof TransferStats && self::connectedOutside($stats, $vetted))) {
                     return $this->refusePin($vetted, $options);
+                }
+
+                if ($head instanceof ResponseInterface) {
+                    $jar?->extractCookies($request, $head);
                 }
 
                 if ($redirect instanceof ResponseInterface) {

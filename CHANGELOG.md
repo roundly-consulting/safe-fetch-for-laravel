@@ -34,7 +34,8 @@ Initial public release.
   `Safe-Fetch-Truncated: 1`; `SafeFetch::truncated($response)` reads the mark
   (`SafeFetchManager::TRUNCATED_HEADER` names it).
 - Redirects, off by default: 307/308 at most three hops when on, every hop vetted and pinned
-  again, no https to http, headers and credentials kept to the first origin, one time budget.
+  again, no https to http, headers and credentials kept to the first origin, cookies sent and
+  stored per hop (a redirected-to site cannot set cookies for the first one), one time budget.
   `RedirectPolicy::methodPreserving($max, forwardHeaders: [...])` builds a followed policy that
   also sends named headers (a webhook signature) to another origin in one call; the
   `forwardHeaders()`, `allowingDowngrade()` and `max()` withers change one setting each.

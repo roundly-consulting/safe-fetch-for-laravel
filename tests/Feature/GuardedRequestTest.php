@@ -263,6 +263,45 @@ it('keeps headers away from another origin', function (): void {
         && $request->header('Content-Type') === ['application/json']);
 });
 
+it('keeps cookies per hop, like guzzles own redirects', function (Closure $start, array $first): void {
+    SafeFetch::fakeDns(['a.example' => '93.184.216.34', 'b.example' => '151.101.1.1']);
+    $sent = [];
+    Http::fake(static function (Request $request) use (&$sent) {
+        $sent[$request->url()] = $request->header('Cookie');
+
+        return match ($request->url()) {
+            'https://a.example/login' => Http::response('', 307, ['Location' => '/next', 'Set-Cookie' => 'session=abc; Path=/']),
+            'https://a.example/next' => Http::response('', 307, ['Location' => 'https://b.example/x']),
+            default => Http::response('ok', 200, ['Set-Cookie' => ['evil=1; Domain=a.example; Path=/', 'own=1; Path=/']]),
+        };
+    });
+
+    $response = $start()->safe(SafeFetch::policy()->followRedirects())->get('https://a.example/login');
+    $jar = array_map(static fn (array $cookie): string => $cookie['Name'].'@'.$cookie['Domain'], $response->cookies()->toArray());
+    sort($jar);
+
+    expect($sent['https://a.example/login'])->toBe($first)
+        ->and($sent['https://a.example/next'])->toBe([implode('; ', [...$first, 'session=abc'])])
+        ->and($sent['https://b.example/x'])->toBe([])
+        // b.example cannot plant a cookie for a.example; its own cookie stays its own.
+        ->and($jar)->toBe($first === [] ? ['own@b.example', 'session@a.example'] : ['own@b.example', 'pre@a.example', 'session@a.example']);
+})->with([
+    'the request\'s own jar' => [fn () => Http::withOptions([]), []],
+    'a jar from withCookies()' => [fn () => Http::withCookies(['pre' => '1'], 'a.example'), ['pre=1']],
+]);
+
+it('sends no cookies when the request turns them off', function (): void {
+    Http::fake([
+        'hooks.example/next' => Http::response('ok'),
+        'hooks.example/*' => Http::response('', 307, ['Location' => '/next', 'Set-Cookie' => 'session=abc; Path=/']),
+    ]);
+
+    $response = Http::withOptions(['cookies' => false])->safe(SafeFetch::policy()->followRedirects())->get('https://hooks.example/start');
+
+    expect($response->body())->toBe('ok');
+    Http::assertSent(static fn (Request $request): bool => ! $request->hasHeader('Cookie'));
+});
+
 it('keeps headers on the same origin', function (): void {
     Http::fake([
         'hooks.example/start' => Http::response('', 308, ['Location' => '/next']),
