@@ -7,7 +7,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: [ubuntu-latest]
         php: [8.4, 8.5, 8.6]
@@ -16,8 +16,20 @@ jobs:
         include:
           - laravel: 13.*
             testbench: 11.*
+          # The oldest graph Laravel 13 allows: Guzzle 7.8.2, which predates the `protocols`
+          # option. Composer blocks Guzzle releases with security advisories by default, so the
+          # floor is only reachable with that block off — CI-only, nothing is committed.
+          - os: ubuntu-latest
+            php: 8.4
+            laravel: 13.*
+            testbench: 11.*
+            stability: prefer-lowest
 
     name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
+
+    env:
+      # A real-network test that cannot run fails instead of skipping.
+      SAFE_FETCH_REQUIRE_NETWORK_TESTS: 1
 
     steps:
       - name: Checkout code
@@ -28,9 +40,11 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, intl, fileinfo
-          coverage: xdebug
+          coverage: ${{ matrix.stability == 'prefer-stable' && 'xdebug' || 'none' }}
 
       - name: Install dependencies
+        env:
+          COMPOSER_NO_SECURITY_BLOCKING: ${{ matrix.stability == 'prefer-lowest' && '1' || '' }}
         run: |
           # Laravel's 13.x releases before 13.32 predate PHP 8.6 (their session handlers miss
           # create_sid()), so a PHP 8.6 job resolves the framework from 13.32.
@@ -40,105 +54,56 @@ jobs:
       - name: List Installed Dependencies
         run: composer show -D
 
-      - name: Execute tests
-        run: vendor/bin/pest --coverage --min=90
+      - name: Assert the Guzzle major this leg tests
+        run: |
+          version="$(composer show guzzlehttp/guzzle --format=json | php -r 'echo json_decode(stream_get_contents(STDIN), true)["versions"][0];')"
+          echo "guzzlehttp/guzzle ${version}"
+          case "${{ matrix.stability }}:${version}" in
+            prefer-lowest:7.8.*|prefer-stable:8.*) ;;
+            *) echo "unexpected Guzzle ${version} on a ${{ matrix.stability }} leg"; exit 1 ;;
+          esac
 
-  # Real-engine legs: uncomment when the package ships migrations.
-  # test-pgsql:
-  #   runs-on: ubuntu-latest
-  #   name: P8.4 - pgsql real-engine
-  #
-  #   steps:
-  #     # Started first so the engine boots while PHP installs. tmpfs + durability off: the same
-  #     # planner, isolation levels, locks and limits — nothing a test leg proves needs fsync.
-  #     - name: Start postgres
-  #       run: >-
-  #         docker run -d --name postgres --tmpfs /var/lib/postgresql/data
-  #         -e POSTGRES_DB=testing -e POSTGRES_USER=testing -e POSTGRES_PASSWORD=secret
-  #         -p 5432:5432 postgres:16
-  #         -c fsync=off -c synchronous_commit=off -c full_page_writes=off
-  #
-  #     - name: Checkout code
-  #       uses: actions/checkout@v7
-  #
-  #     - name: Setup PHP
-  #       uses: shivammathur/setup-php@v2
-  #       with:
-  #         php-version: 8.4
-  #         extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, pgsql, pdo_pgsql, bcmath, intl, fileinfo
-  #         coverage: none
-  #
-  #     - name: Install dependencies
-  #       run: composer update --prefer-stable --prefer-dist --no-interaction
-  #
-  #     # The image's init server listens on the socket only, so a TCP answer means the real one is up.
-  #     - name: Wait for postgres
-  #       run: |
-  #         for _ in $(seq 1 90); do
-  #           docker exec postgres psql -h 127.0.0.1 -U testing -d testing -c 'select 1' >/dev/null 2>&1 && exit 0
-  #           sleep 1
-  #         done
-  #         docker logs postgres
-  #         exit 1
-  #
-  #     - name: Execute tests against postgres
-  #       env:
-  #         # TESTING_DB_DRIVER is what moves the suite off sqlite; the location vars alone only
-  #         # say where the engine is.
-  #         TESTING_DB_DRIVER: pgsql
-  #         TESTING_DB_HOST: 127.0.0.1
-  #         TESTING_DB_PORT: 5432
-  #         TESTING_DB_DATABASE: testing
-  #         TESTING_DB_USERNAME: testing
-  #         TESTING_DB_PASSWORD: secret
-  #       # Coverage is enforced on the sqlite matrix; this is a correctness leg. Parallel
-  #       # workers each get their own database (testing-for-laravel's DriverMatrix).
-  #       run: vendor/bin/pest --ci --parallel
-  #
-  # test-mysql:
-  #   runs-on: ubuntu-latest
-  #   name: P8.4 - mysql real-engine
-  #
-  #   steps:
-  #     # Started first, tmpfs datadir, binlog off and no flush per commit — the same InnoDB,
-  #     # isolation levels, locking and limits. performance_schema stays on: race tests read
-  #     # data_lock_waits.
-  #     - name: Start mysql
-  #       run: >-
-  #         docker run -d --name mysql --tmpfs /var/lib/mysql
-  #         -e MYSQL_DATABASE=testing -e MYSQL_ROOT_PASSWORD=secret
-  #         -p 3306:3306 mysql:8
-  #         --skip-log-bin --sync-binlog=0 --innodb-flush-log-at-trx-commit=0 --innodb-doublewrite=OFF
-  #
-  #     - name: Checkout code
-  #       uses: actions/checkout@v7
-  #
-  #     - name: Setup PHP
-  #       uses: shivammathur/setup-php@v2
-  #       with:
-  #         php-version: 8.4
-  #         extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, mysql, pdo_mysql, bcmath, intl, fileinfo
-  #         coverage: none
-  #
-  #     - name: Install dependencies
-  #       run: composer update --prefer-stable --prefer-dist --no-interaction
-  #
-  #     # The image's init server runs with networking off, so a TCP answer means the real one is up.
-  #     - name: Wait for mysql
-  #       run: |
-  #         for _ in $(seq 1 90); do
-  #           docker exec mysql mysql -h 127.0.0.1 -uroot -psecret -e 'select 1' testing >/dev/null 2>&1 && exit 0
-  #           sleep 1
-  #         done
-  #         docker logs mysql
-  #         exit 1
-  #
-  #     - name: Execute tests against mysql
-  #       env:
-  #         TESTING_DB_DRIVER: mysql
-  #         TESTING_DB_HOST: 127.0.0.1
-  #         TESTING_DB_PORT: 3306
-  #         TESTING_DB_DATABASE: testing
-  #         TESTING_DB_USERNAME: root
-  #         TESTING_DB_PASSWORD: secret
-  #       run: vendor/bin/pest --ci --parallel
+      - name: Execute tests
+        if: matrix.stability == 'prefer-stable'
+        run: vendor/bin/pest --coverage --min=95 --coverage-clover=build/clover.xml
+
+      - name: Security core fully covered
+        if: matrix.stability == 'prefer-stable'
+        run: php bin/core-coverage.php build/clover.xml
+
+      - name: Execute tests (no coverage)
+        if: matrix.stability != 'prefer-stable'
+        run: vendor/bin/pest --ci
+
+  guzzle-7-latest:
+    runs-on: ubuntu-latest
+    name: P8.4 - L13.* - Guzzle 7 latest
+
+    env:
+      SAFE_FETCH_REQUIRE_NETWORK_TESTS: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, intl, fileinfo
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          # CI-time only, never committed: the 7.12+ deprecation layer over raw curl options.
+          composer require --dev "guzzlehttp/guzzle:^7.16" -W --no-interaction --no-update
+          composer update --prefer-stable --prefer-dist --no-interaction
+
+      - name: Assert Guzzle 7
+        run: |
+          version="$(composer show guzzlehttp/guzzle --format=json | php -r 'echo json_decode(stream_get_contents(STDIN), true)["versions"][0];')"
+          echo "guzzlehttp/guzzle ${version}"
+          case "${version}" in 7.*) ;; *) echo "expected Guzzle 7, got ${version}"; exit 1 ;; esac
+
+      - name: Execute tests
+        run: vendor/bin/pest --ci
