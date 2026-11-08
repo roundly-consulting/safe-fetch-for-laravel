@@ -7,6 +7,7 @@ namespace RoundlyConsulting\SafeFetch\Testing;
 use Closure;
 use Illuminate\Contracts\Container\Container;
 use PHPUnit\Framework\Assert as PHPUnit;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\CanonicalUrl;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchedResponse;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
@@ -19,8 +20,8 @@ use RoundlyConsulting\SafeFetch\Support\UrlCanonicaliser;
 /**
  * The manager `SafeFetch::fake()` installs. It keeps the **real** guard — a private address is
  * still refused — answers DNS from a table (unknown names resolve to the public `93.184.216.34`
- * unless {@see self::strictDns()}), and records every verdict: `vet()`, `allows()`, each hop of a
- * guarded request (`via: http`) and every `fetch()`.
+ * unless {@see self::strictDns()}), and records every verdict: `vet()`, `allows()`, `precheck()`,
+ * each hop of a guarded request (`via: http`) and every `fetch()`.
  *
  * Requests still go through Laravel's HTTP client: answer them with `Http::fake()`. One that
  * reaches the network is refused before dialling (a test that forgot `Http::fake()` would
@@ -80,6 +81,21 @@ final class SafeFetchFake extends SafeFetchManager
         }
 
         return true;
+    }
+
+    public function precheck(string $url, ?DestinationPolicy $policy = null): CanonicalUrl
+    {
+        try {
+            $canonical = parent::precheck($url, $policy);
+        } catch (SafeFetchException $exception) {
+            $this->vets[] = new RecordedVet($url, 'precheck', null, $exception->reason());
+
+            throw $exception;
+        }
+
+        $this->vets[] = new RecordedVet($url, 'precheck', null, null);
+
+        return $canonical;
     }
 
     public function vetHop(string $url, DestinationPolicy $policy): VettedDestination

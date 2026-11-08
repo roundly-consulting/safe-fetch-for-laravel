@@ -8,9 +8,9 @@ use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 
 /**
- * One URL the guard judged under `SafeFetch::fake()`: how it was asked (`vet`, `allows`, or `http`
- * for a hop of a guarded request) and its verdict — the vetted destination, or the reason it was
- * refused.
+ * One URL the guard judged under `SafeFetch::fake()`: how it was asked (`vet`, `allows`,
+ * `precheck`, or `http` for a hop of a guarded request) and its verdict — the vetted destination
+ * (null for a precheck, which resolves nothing), or the reason it was refused.
  */
 final readonly class RecordedVet
 {

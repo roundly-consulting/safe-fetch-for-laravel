@@ -11,7 +11,9 @@ use Illuminate\Http\Client\Response;
 use Psr\Http\Message\ResponseInterface;
 use RoundlyConsulting\SafeFetch\Actions\FetchUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\GuardRequestAction;
+use RoundlyConsulting\SafeFetch\Actions\PrecheckDestinationAction;
 use RoundlyConsulting\SafeFetch\Actions\VetDestinationAction;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\CanonicalUrl;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchedResponse;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchOptions;
@@ -67,6 +69,19 @@ class SafeFetchManager
         }
 
         return true;
+    }
+
+    /**
+     * Judge `$url` by every rule that needs no DNS lookup — shape, scheme, port, blocked and app
+     * hosts, the allowlist, `localhost`, and an address literal in full — and return it rebuilt.
+     * For save time and forms that should not wait on DNS: a name is not resolved, so it can still
+     * resolve privately. {@see self::vet()} (or send through the guard) when you fetch it.
+     *
+     * @throws DestinationRejected
+     */
+    public function precheck(string $url, ?DestinationPolicy $policy = null): CanonicalUrl
+    {
+        return $this->container->make(PrecheckDestinationAction::class)->execute($url, $policy ?? $this->policy());
     }
 
     /** A new guarded request from Laravel's HTTP client — `Http::safe()` without the macro. */

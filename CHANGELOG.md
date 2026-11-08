@@ -38,7 +38,11 @@ Initial public release.
 - `SafeFetch::fetch()`: a GET into memory with a byte cap (decoded bytes, so a compressed bomb
   stops too) and failures that say whether a retry can help (`retryable()`, `retryAfter()`).
 - `SafeFetch::vet()` / `allows()`, `SafeFetch::networks()`, `SafeFetch::urls()`.
-- The `SafeUrl` rule and the `safe_url` string rule, with one message whatever the reason.
+- `SafeFetch::precheck()`: every rule except the DNS lookup (shape, scheme, port, blocked and app
+  hosts, the allowlist, `localhost`, an address literal in full) for save time and forms that
+  should not wait on DNS; the URL is judged in full again when it is fetched.
+- The `SafeUrl` rule and the `safe_url` string rule, with one message whatever the reason;
+  `SafeUrl::withoutLookup()` validates through `precheck()`.
 - `php artisan safe-fetch:check {url?}`: a URL's verdict, or a check of the environment.
 - `DestinationRefused` event for every refusal (reason, host, rule; never the URL).
 - `SafeFetch::fake()` and `SafeFetch::fakeDns()` for host tests, with assertions for what was

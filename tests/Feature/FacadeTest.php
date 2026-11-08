@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Http;
 use RoundlyConsulting\SafeFetch\Actions\FetchUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\GuardRequestAction;
+use RoundlyConsulting\SafeFetch\Actions\PrecheckDestinationAction;
 use RoundlyConsulting\SafeFetch\Actions\VetDestinationAction;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchOptions;
@@ -35,6 +36,7 @@ it('runs every facade method', function (): void {
     expect(SafeFetch::vet('https://hooks.example/a')->url)->toBe('https://hooks.example/a')
         ->and(SafeFetch::allows('https://inward.example/'))->toBeFalse()
         ->and(SafeFetch::allows('https://hooks.example/'))->toBeTrue()
+        ->and(SafeFetch::precheck('https://unresolvable.example/x')->host)->toBe('unresolvable.example')
         ->and(SafeFetch::http())->toBeInstanceOf(PendingRequest::class)
         ->and(SafeFetch::http()->get('https://hooks.example/b')->body())->toBe('ok')
         ->and(SafeFetch::guard(Http::withToken('t'))->get('https://hooks.example/c')->body())->toBe('ok')
@@ -52,6 +54,7 @@ it('runs the same api through an injected manager', function (): void {
 
     expect($manager)->toBe(app(SafeFetchManager::class))
         ->and($manager->vet('https://hooks.example/')->addresses)->toBe(['93.184.216.34'])
+        ->and($manager->precheck('https://hooks.example/z')->toString())->toBe('https://hooks.example/z')
         ->and($manager->http()->get('https://hooks.example/x')->body())->toBe('ok')
         ->and($manager->fetch('https://hooks.example/y')->status)->toBe(200);
 });
@@ -60,6 +63,7 @@ it('runs the raw actions', function (): void {
     Http::fake(['hooks.example/*' => Http::response('ok', 200)]);
 
     expect(app(VetDestinationAction::class)->execute('https://hooks.example/', SafeFetch::policy())->host)->toBe('hooks.example')
+        ->and(app(PrecheckDestinationAction::class)->execute('https://hooks.example/q', SafeFetch::policy())->pathAndQuery)->toBe('/q')
         ->and(app(GuardRequestAction::class)->execute(Http::withToken('t'), SafeFetch::policy())->post('https://hooks.example/p')->body())->toBe('ok')
         ->and(app(FetchUrlAction::class)->execute('https://hooks.example/f', new FetchOptions, SafeFetch::policy())->body)->toBe('ok');
 });

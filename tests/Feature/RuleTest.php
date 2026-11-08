@@ -56,3 +56,26 @@ it('the string rule validates', function (): void {
         ->and(Validator::make(['odkaz' => 'https://intranet.example/'], ['odkaz' => 'safe_url'], ['safe_url' => 'Custom.'])->errors()->first('odkaz'))
         ->toBe('Custom.');
 });
+
+it('validates without a lookup', function (mixed $value, bool $passes): void {
+    $dns = SafeFetch::fakeDns();
+
+    expect(Validator::make(['url' => $value], ['url' => [SafeUrl::withoutLookup()]])->passes())->toBe($passes);
+    $dns->assertNothingLookedUp();
+})->with([
+    'an unresolvable public name' => ['https://not-yet.example/hook', true],
+    'localhost' => ['https://localhost/', false],
+    'a private literal' => ['https://10.0.0.5/', false],
+    'http' => ['http://docs.example/', false],
+    'no url' => ['not a url', false],
+    'not a string' => [42, false],
+]);
+
+it('validates without a lookup under a policy, with the one message', function (): void {
+    SafeFetch::fakeDns();
+    $rule = SafeUrl::withoutLookup(SafeFetch::policy()->allowHttp()->allowHosts(['hooks.example']));
+
+    expect(Validator::make(['url' => 'http://hooks.example/'], ['url' => [$rule]])->passes())->toBeTrue()
+        ->and(Validator::make(['feed' => 'https://other.example/'], ['feed' => [$rule]])->errors()->first('feed'))
+        ->toBe('The feed must be a URL this application is allowed to fetch.');
+});

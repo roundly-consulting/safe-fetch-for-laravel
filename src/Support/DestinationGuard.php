@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\SafeFetch\Support;
 
 use RoundlyConsulting\SafeFetch\Contracts\HostResolver;
+use RoundlyConsulting\SafeFetch\DataTransferObjects\CanonicalUrl;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
@@ -38,10 +39,13 @@ final readonly class DestinationGuard
     ) {}
 
     /**
+     * Every rule that needs no lookup — steps 1–4, and step 6 for an address literal — so a URL
+     * can be judged at save time without DNS. A name passes when no name rule refuses it; it is
+     * **not** resolved, so it can still resolve privately: {@see self::vet()} it again at send time.
+     *
      * @throws DestinationRejected
-     * @throws DestinationUnavailable when the host name does not resolve
      */
-    public function vet(string $url, DestinationPolicy $policy): VettedDestination
+    public function precheck(string $url, DestinationPolicy $policy): CanonicalUrl
     {
         $canonical = $this->canonicaliser->canonicalise($url);
         $host = $canonical->host;
@@ -53,8 +57,6 @@ final readonly class DestinationGuard
         if ($policy->ports !== null && ! in_array($canonical->port, $policy->ports, true)) {
             throw DestinationRejected::because(Reason::Port, $url, $host);
         }
-
-        $privateHost = false;
 
         if (! $canonical->ipLiteral) {
             if (HostPattern::matches($host, $policy->blockedHosts)) {
@@ -72,14 +74,24 @@ final readonly class DestinationGuard
             throw DestinationRejected::because(Reason::NotAllowed, $url, $host);
         }
 
-        if (! $canonical->ipLiteral) {
-
-            $privateHost = HostPattern::matches($host, $policy->privateHosts);
-
-            if (! $privateHost && PrivateNetworks::isBlockedHostname($host)) {
-                throw DestinationRejected::because(Reason::Blocked, $url, $host, 'hostname');
-            }
+        if ($canonical->ipLiteral) {
+            $this->judge($host, $url, $host, $policy, privateHost: false);
+        } elseif (! self::isPrivateHost($host, $policy) && PrivateNetworks::isBlockedHostname($host)) {
+            throw DestinationRejected::because(Reason::Blocked, $url, $host, 'hostname');
         }
+
+        return $canonical;
+    }
+
+    /**
+     * @throws DestinationRejected
+     * @throws DestinationUnavailable when the host name does not resolve
+     */
+    public function vet(string $url, DestinationPolicy $policy): VettedDestination
+    {
+        $canonical = $this->precheck($url, $policy);
+        $host = $canonical->host;
+        $privateHost = ! $canonical->ipLiteral && self::isPrivateHost($host, $policy);
 
         $addresses = $canonical->ipLiteral ? [$host] : $this->resolver->resolve($host);
 
@@ -90,26 +102,8 @@ final readonly class DestinationGuard
         $vetted = [];
 
         foreach ($addresses as $address) {
-            $bytes = AddressRanges::bytes($address);
-
-            // A resolver answer that is no address is never dialled, whatever the policy trusts.
-            if ($bytes === null) {
-                throw DestinationRejected::because(Reason::Blocked, $url, $host, 'private_address');
-            }
-
-            $address = (string) inet_ntop($bytes);
+            $address = $this->judge($address, $url, $host, $policy, $privateHost);
             $vetted[$address] = $address;
-
-            if (AddressRanges::contains($policy->blockedRanges, $address)) {
-                throw DestinationRejected::because(Reason::Blocked, $url, $host, 'blocked_range');
-            }
-
-            $exempt = AddressRanges::contains($policy->allowedRanges, $address)
-                || ($privateHost && ! PrivateNetworks::isMetadata($address));
-
-            if (PrivateNetworks::isPrivate($address) && ! $exempt) {
-                throw DestinationRejected::because(Reason::Blocked, $url, $host, 'private_address');
-            }
         }
 
         return new VettedDestination(
@@ -120,5 +114,40 @@ final readonly class DestinationGuard
             $canonical->ipLiteral,
             array_values($vetted),
         );
+    }
+
+    /**
+     * Step 6 for one address: its normal form, or the refusal.
+     *
+     * @throws DestinationRejected
+     */
+    private function judge(string $address, string $url, string $host, DestinationPolicy $policy, bool $privateHost): string
+    {
+        $bytes = AddressRanges::bytes($address);
+
+        // A resolver answer that is no address is never dialled, whatever the policy trusts.
+        if ($bytes === null) {
+            throw DestinationRejected::because(Reason::Blocked, $url, $host, 'private_address');
+        }
+
+        $address = (string) inet_ntop($bytes);
+
+        if (AddressRanges::contains($policy->blockedRanges, $address)) {
+            throw DestinationRejected::because(Reason::Blocked, $url, $host, 'blocked_range');
+        }
+
+        $exempt = AddressRanges::contains($policy->allowedRanges, $address)
+            || ($privateHost && ! PrivateNetworks::isMetadata($address));
+
+        if (PrivateNetworks::isPrivate($address) && ! $exempt) {
+            throw DestinationRejected::because(Reason::Blocked, $url, $host, 'private_address');
+        }
+
+        return $address;
+    }
+
+    private static function isPrivateHost(string $host, DestinationPolicy $policy): bool
+    {
+        return HostPattern::matches($host, $policy->privateHosts);
     }
 }

@@ -12,6 +12,7 @@ use RoundlyConsulting\SafeFetch\Testing\SafeFetchFake;
 
 /**
  * @method static \RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination vet(string $url, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
+ * @method static \RoundlyConsulting\SafeFetch\DataTransferObjects\CanonicalUrl precheck(string $url, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static bool allows(string $url, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static \Illuminate\Http\Client\PendingRequest http(\RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static \Illuminate\Http\Client\PendingRequest guard(\Illuminate\Http\Client\PendingRequest $request, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
