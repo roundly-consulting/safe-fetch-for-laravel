@@ -50,7 +50,7 @@ Initial public release.
 - `SafeFetch::download()`: the same capped, guarded GET streamed to a file instead of memory
   (`DownloadedFile`: path, bytes, content type, final URL, headers); the body lands in a temporary
   file next to the path and replaces it only on success, so an existing file stays whole while the
-  download runs and is left as it was when it fails.
+  download runs and is left as it was when it fails (a symlink is written through to its target).
 - `SafeFetch::vet()` / `allows()`, `SafeFetch::networks()`, `SafeFetch::urls()`.
 - `SafeFetch::precheck()`: every rule except the DNS lookup (shape, scheme, port, blocked and app
   hosts, the allowlist, `localhost`, an address literal in full) for save time and forms that

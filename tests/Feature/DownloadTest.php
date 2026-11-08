@@ -144,6 +144,22 @@ it('keeps the previous file whole until a download succeeds', function (): void 
         ->and(array_values(array_diff(scandir($this->dir) ?: [], ['.', '..'])))->toBe(['file.bin']);
 });
 
+it('writes through a symlink to its target', function (): void {
+    mkdir($this->dir.'/real');
+    $target = $this->dir.'/real/feed.xml';
+    file_put_contents($target, 'target-old');
+    symlink($target, $this->path);
+    Http::fake(['files.example/*' => Http::response('new body')]);
+
+    $file = SafeFetch::download('https://files.example/', $this->path);
+    clearstatcache();
+
+    expect($file->path)->toBe($this->path)
+        ->and(is_link($this->path))->toBeTrue()
+        ->and(file_get_contents($target))->toBe('new body')
+        ->and(array_values(array_diff(scandir($this->dir.'/real') ?: [], ['.', '..'])))->toBe(['feed.xml']);
+});
+
 it('cleans up when the finished download cannot be moved into place', function (): void {
     Http::fake(['files.example/*' => function () {
         mkdir($this->path);

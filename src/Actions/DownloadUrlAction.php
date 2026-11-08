@@ -24,8 +24,9 @@ use Throwable;
  * The body goes to a temporary file next to `$path` — every hop starts it afresh, so a redirect's
  * body never lands there — and replaces `$path` only once the download succeeded. A file already
  * at `$path` stays whole until then (readers never see it truncated or half written) and is left
- * alone on any failure; the temporary file is deleted. Nothing is written before the first hop
- * passed the guard.
+ * alone on any failure; the temporary file is deleted. A symlink at `$path` is written through:
+ * the temporary file sits next to its target and replaces that. Nothing is written before the
+ * first hop passed the guard.
  */
 final readonly class DownloadUrlAction
 {
@@ -42,6 +43,14 @@ final readonly class DownloadUrlAction
      */
     public function execute(string $url, string $path, FetchOptions $options, DestinationPolicy $policy): DownloadedFile
     {
+        $requested = $path;
+
+        // A symlink is written through, as a plain write would: the swap happens at its target,
+        // never replacing the link itself.
+        if (is_link($path) && ($target = realpath($path)) !== false) {
+            $path = $target;
+        }
+
         $directory = dirname($path);
 
         if ($path === '' || is_dir($path) || ! is_dir($directory) || ! is_writable($directory) || (file_exists($path) && ! is_writable($path))) {
@@ -74,7 +83,7 @@ final readonly class DownloadUrlAction
             throw $exception;
         }
 
-        return new DownloadedFile($done->status(), $path, $done->sink->written, $done->contentType(), $done->url, $done->headers());
+        return new DownloadedFile($done->status(), $requested, $done->sink->written, $done->contentType(), $done->url, $done->headers());
     }
 
     private static function temporaryFile(string $directory, string $path): string
