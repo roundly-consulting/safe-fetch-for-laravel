@@ -8,7 +8,7 @@ use Psr\Http\Message\ResponseInterface;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\VettedDestination;
 
 /**
- * What one `SafeFetch::fetch()` learned while its transfer ran: the hop it is on, the buffer that
+ * What one capped transfer (`SafeFetch::fetch()` or `download()`) learned while it ran: the hop it is on, the buffer that
  * hop's body goes to, and why it stopped a transfer early (a non-2xx head, a declared length over
  * the cap).
  *
