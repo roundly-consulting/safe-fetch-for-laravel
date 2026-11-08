@@ -64,16 +64,21 @@ final class PrivateNetworks
     ];
 
     /**
-     * The cloud-metadata endpoints. All are in the table above; these are also never exempted by a
-     * private host (`hosts.private`) — only an allowed range names them back in. A name trusted to
-     * resolve privately that answers with one is misconfigured or poisoned DNS, and these are the
-     * addresses that hand out credentials.
+     * The cloud-metadata and credential endpoints, as ranges. All are in the table above; these are
+     * also never exempted by a private host (`hosts.private`) — only an allowed range names them
+     * back in. A name trusted to resolve privately that answers with one is misconfigured or
+     * poisoned DNS, and these are the addresses that hand out credentials.
+     *
+     * Link-local is whole: providers keep adding endpoints there (ECS task credentials at
+     * 169.254.170.2, EKS Pod Identity at 169.254.170.23, Tencent at 169.254.0.23), and no service
+     * a private host stands for lives on a link-local address.
      *
      * @var list<string>
      */
     public const array METADATA = [
-        '169.254.169.254',  // AWS, GCP, Azure, OpenStack
-        'fd00:ec2::254',    // AWS over IPv6
+        '169.254.0.0/16',   // link-local: AWS, GCP, Azure, OpenStack (169.254.169.254), AWS ECS, AWS EKS, Tencent
+        'fe80::/10',        // link-local
+        'fd00:ec2::/32',    // AWS over IPv6: instance metadata (fd00:ec2::254), EKS Pod Identity (fd00:ec2::23)
         '100.100.100.200',  // Alibaba Cloud
         '192.0.0.192',      // Oracle Cloud
         '168.63.129.16',    // Azure WireServer

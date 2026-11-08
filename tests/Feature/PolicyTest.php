@@ -449,6 +449,13 @@ it('never exempts a metadata address for a private host', function (string $addr
     'azure wireserver' => '168.63.129.16',
     'ipv4-mapped' => '::ffff:169.254.169.254',
     'nat64' => '64:ff9b::a9fe:a9fe',
+    'aws ecs task credentials' => '169.254.170.2',
+    'aws eks pod identity' => '169.254.170.23',
+    'aws eks pod identity over ipv6' => 'fd00:ec2::23',
+    'tencent' => '169.254.0.23',
+    'any ipv4 link-local' => '169.254.1.1',
+    'any ipv6 link-local' => 'fe80::1',
+    'mapped ecs' => '::ffff:169.254.170.2',
 ]);
 
 it('exempts a metadata address only through an allowed range', function (): void {
@@ -457,7 +464,8 @@ it('exempts a metadata address only through an allowed range', function (): void
     expect(SafeFetch::vet('https://meta.internal/', SafeFetch::policy()->allowRanges(['169.254.169.254/32']))->addresses)->toBe(['169.254.169.254'])
         ->and(SafeFetch::vet('https://meta.internal/', SafeFetch::policy()->trustPrivateHosts(['meta.internal'])->allowRanges(['169.254.0.0/16']))->addresses)->toBe(['169.254.169.254'])
         ->and(blockedBy(fn () => SafeFetch::vet('https://meta.internal/', SafeFetch::policy()->trustPrivateHosts(['meta.internal'])->allowRanges(['10.0.0.0/8']))))->toBe('private_address')
-        ->and(PrivateNetworks::isMetadata('169.254.169.253'))->toBeFalse()
+        ->and(PrivateNetworks::isMetadata('169.255.0.1'))->toBeFalse()
+        ->and(PrivateNetworks::isMetadata('fd00:ec3::23'))->toBeFalse()
         ->and(PrivateNetworks::isMetadata('10.0.0.1'))->toBeFalse()
         ->and(PrivateNetworks::isMetadata('not an address'))->toBeFalse();
 });

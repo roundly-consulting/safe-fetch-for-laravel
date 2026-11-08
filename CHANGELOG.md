@@ -26,7 +26,8 @@ Initial public release.
   host allowlist (`allowHosts()` replaces it and refuses an empty list, so a list that happens to
   be empty never opens the guard), blocked hosts, the app's own hosts (`blockAppHosts()` turns the
   block on or off over the configuration), private-host exemptions (still resolved and pinned,
-  never for a cloud-metadata address — only an allowed range names one back in), allowed and
+  never for a link-local or other cloud-metadata address — ECS and EKS credential endpoints
+  included — only an allowed range names one back in), allowed and
   blocked address ranges. `withoutHostAllowlist()`, `withoutPrivateHosts()` and
   `withoutAllowedRanges()` drop the host's carve-outs while keeping its blocks — the start of a
   policy for another package's untrusted URLs.
