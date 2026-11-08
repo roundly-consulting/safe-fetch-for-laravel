@@ -11,6 +11,10 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 - A blocked or allowed IPv6 range inside a prefix that carries IPv4 (`::ffff:8.8.8.0/120`,
   `64:ff9b::808:800/120`, `2002:808:800::/40`) now also covers the plain IPv4 addresses it carries:
   `blockRanges(['::ffff:8.8.8.8'])` refuses `https://8.8.8.8/` and any name resolving to it.
+- A followed 301 or 302 that keeps a PUT, PATCH or DELETE now rewinds the request body before the
+  next hop, and returns the redirect unfollowed when the body cannot be rewound, as 307/308 already
+  did. It used to send the next hop with an empty body (Guzzle 7) or fail with a connection error
+  (Guzzle 8).
 
 ## 1.0.0 - 2026-11-08
 

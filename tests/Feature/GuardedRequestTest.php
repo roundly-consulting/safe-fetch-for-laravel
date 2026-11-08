@@ -400,6 +400,30 @@ it('does not replay a body it cannot rewind', function (): void {
     Http::assertSentCount(1);
 });
 
+it('does not replay a body it cannot rewind on a redirect that keeps the method', function (int $status, string $method): void {
+    Http::fake(['hooks.example/*' => Http::response('', $status, ['Location' => '/next'])]);
+    $policy = SafeFetch::policy()->redirects(new RedirectPolicy(enabled: true, statuses: [301, 302]));
+
+    $response = Http::safe($policy)->withBody(new NoSeekStream(Utils::streamFor('payload')), 'text/plain')->send($method, 'https://hooks.example/start');
+
+    expect($response->status())->toBe($status);
+    Http::assertSentCount(1);
+})->with([[301, 'PUT'], [302, 'PUT'], [301, 'PATCH'], [302, 'DELETE']]);
+
+it('sends a rewound body again on a redirect that keeps the method', function (int $status): void {
+    Http::fake([
+        'hooks.example/start' => Http::response('', $status, ['Location' => '/next']),
+        'hooks.example/next' => Http::response('ok'),
+    ]);
+    $policy = SafeFetch::policy()->redirects(new RedirectPolicy(enabled: true, statuses: [301, 302]));
+    $body = Utils::streamFor('payload');
+
+    Http::safe($policy)->withBody($body, 'text/plain')->put('https://hooks.example/start');
+
+    Http::assertSent(static fn (Request $request): bool => $request->url() === 'https://hooks.example/next'
+        && $request->method() === 'PUT' && $request->body() === 'payload');
+})->with([301, 302]);
+
 it('spends one timeout budget across hops', function (): void {
     $now = 1_000.0;
     app()->instance(Clock::class, new Clock(static function () use (&$now): float {

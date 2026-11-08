@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use GuzzleHttp\Handler\CurlHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Uri;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -141,6 +143,29 @@ it('follows a real 307 with its body', function (): void {
         ->and($this->server->requests())->toHaveCount(2)
         ->and($this->server->requests()[1])->toStartWith('POST /echo body=payload');
 });
+
+it('leaves a real redirect that keeps the method unfollowed when its body cannot be sent again', function (int $status): void {
+    $policy = networkPolicy()->redirects(RedirectPolicy::methodPreserving()->withStatuses([301, 302, 307]));
+
+    $response = Http::safe($policy)
+        ->withBody(new NoSeekStream(Utils::streamFor('payload')), 'text/plain')
+        ->put($this->server->url('pin.invalid', "/redirect?status={$status}&to=/echo"));
+
+    expect($response->status())->toBe($status)
+        ->and($this->server->requests())->toHaveCount(1);
+})->with([301, 302, 307]);
+
+it('sends a real body again on a redirect that keeps the method', function (int $status): void {
+    $policy = networkPolicy()->redirects(RedirectPolicy::methodPreserving()->withStatuses([301, 302]));
+
+    $response = Http::safe($policy)
+        ->withBody('payload', 'text/plain')
+        ->put($this->server->url('pin.invalid', "/redirect?status={$status}&to=/echo"));
+
+    expect($response->body())->toBe('PUT body=payload')
+        ->and($this->server->requests())->toHaveCount(2)
+        ->and($this->server->requests()[1])->toStartWith('PUT /echo body=payload');
+})->with([301, 302]);
 
 it('sends a cookie a real redirect set to the next hop', function (): void {
     $response = Http::safe(networkPolicy()->followRedirects())

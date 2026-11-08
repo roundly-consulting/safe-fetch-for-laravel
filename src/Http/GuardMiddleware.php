@@ -343,9 +343,9 @@ final readonly class GuardMiddleware
         $status = $response->getStatusCode();
         $method = strtoupper($request->getMethod());
 
-        if (($status === 307 || $status === 308) && $request->getBody()->isSeekable()) {
+        if (self::resendsBody($status, $method) && $request->getBody()->isSeekable()) {
             $request->getBody()->rewind();
-        } elseif (($status === 303 && $method !== 'HEAD') || (($status === 301 || $status === 302) && $method === 'POST')) {
+        } elseif (self::switchesToGet($status, $method)) {
             $request = $request->withMethod('GET')->withBody(Utils::streamFor(''));
 
             foreach (array_keys($request->getHeaders()) as $name) {
@@ -360,7 +360,8 @@ final readonly class GuardMiddleware
 
     /**
      * Whether the guard follows this answer: redirects on, a followed status, a `Location` — and,
-     * for 307/308, a body it can send again (one it cannot rewind is returned unfollowed).
+     * when the next hop sends the body again (307/308, or a 301/302 that keeps a PUT, PATCH or
+     * DELETE), a body it can rewind (one it cannot is returned unfollowed).
      */
     private function follows(ResponseInterface $response, RequestInterface $request): bool
     {
@@ -370,7 +371,23 @@ final readonly class GuardMiddleware
             return false;
         }
 
-        return ($status !== 307 && $status !== 308) || $request->getBody()->isSeekable();
+        return ! self::resendsBody($status, strtoupper($request->getMethod())) || $request->getBody()->isSeekable();
+    }
+
+    /** Whether a redirect turns the request into a body-less GET, as HTTP says (303; 301/302 for a POST). */
+    private static function switchesToGet(int $status, string $method): bool
+    {
+        return ($status === 303 && $method !== 'HEAD') || (($status === 301 || $status === 302) && $method === 'POST');
+    }
+
+    /**
+     * Whether the next hop sends the request body again: 307/308 always; any other redirect that
+     * keeps a method other than GET or HEAD.
+     */
+    private static function resendsBody(int $status, string $method): bool
+    {
+        return $status === 307 || $status === 308
+            || (! self::switchesToGet($status, $method) && $method !== 'GET' && $method !== 'HEAD');
     }
 
     /**
