@@ -18,6 +18,9 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 - `config/safe-fetch.php`: `fetch.max_bytes` and `fetch.timeout` apply to `download()` as well as
   `fetch()`, and `redirects.statuses` says `download()`, like `fetch()`, widens the default to all
   five statuses.
+- `safe-fetch:check` without curl names every entry point that refuses with `cannot_pin`:
+  `Http::safe()`, `guard()`, `http()`, `fetch()`, `download()` and `pinningOptions()`. It used to
+  name only `Http::safe()`, `fetch()` and `download()`.
 
 ## 1.0.1 - 2026-11-08
 

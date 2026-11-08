@@ -22,7 +22,7 @@ use Throwable;
  */
 final class CheckCommand extends Command
 {
-    private const string NO_CURL = 'ext-curl with CURLOPT_RESOLVE is required to send guarded requests: Http::safe(), fetch() and download() refuse with cannot_pin.';
+    private const string NO_CURL = 'ext-curl with CURLOPT_RESOLVE is required to send guarded requests: Http::safe(), guard(), http(), fetch(), download() and pinningOptions() refuse with cannot_pin.';
 
     /** @var string */
     protected $signature = 'safe-fetch:check

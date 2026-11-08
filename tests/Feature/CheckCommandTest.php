@@ -95,6 +95,17 @@ it('check fails without curl or with a broken configuration', function (): void 
     $this->artisan('safe-fetch:check')->expectsOutputToContain('The configuration is invalid')->assertExitCode(1);
 });
 
+it('check names every entry point that refuses without curl', function (): void {
+    CurlSupport::assume(available: false);
+
+    Artisan::call('safe-fetch:check', ['--json' => true]);
+    $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($report['errors'])->toBe([
+        'ext-curl with CURLOPT_RESOLVE is required to send guarded requests: Http::safe(), guard(), http(), fetch(), download() and pinningOptions() refuse with cannot_pin.',
+    ]);
+});
+
 it('check reports the pre send check off where guzzle deprecates it', function (): void {
     CurlSupport::assume(guzzleVersion: '7.12.1');
 
