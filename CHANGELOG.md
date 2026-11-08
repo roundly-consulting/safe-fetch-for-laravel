@@ -6,6 +6,8 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 
 ## Unreleased
 
+## 1.0.1 - 2026-11-08
+
 ### Fixed
 
 - A blocked or allowed IPv6 range inside a prefix that carries IPv4 (`::ffff:8.8.8.0/120`,
