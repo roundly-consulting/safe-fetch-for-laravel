@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Handler\CurlHandler;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Request as PsrRequest;
@@ -26,6 +27,7 @@ use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
 use RoundlyConsulting\SafeFetch\Exceptions\SafeFetchException;
 use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\Facades\SafeFetch;
+use RoundlyConsulting\SafeFetch\Http\GuardedClient;
 use RoundlyConsulting\SafeFetch\Http\GuardMiddleware;
 use RoundlyConsulting\SafeFetch\SafeFetchManager;
 use RoundlyConsulting\SafeFetch\Support\Clock;
@@ -141,6 +143,25 @@ it('refuses request level transport sharing and a client of its own', function (
         ->toThrow(UnsafeRequestOptions::class, '[transport_sharing]')
         ->and(fn () => Http::setClient(new Client)->safe())->toThrow(UnsafeRequestOptions::class, '[client]')
         ->and(fn () => Http::safe()->safe())->toThrow(UnsafeRequestOptions::class, 'already guarded');
+});
+
+it('sends through the guarded client, which laravel still asks for', function (): void {
+    // The guard relies on Laravel sending through `buildClient()`, which returns the `client`
+    // property it set. If an upgrade types that property or stops using it, this fails loudly —
+    // a request option `handler` would get around the guard again on Guzzle 7.
+    $property = new ReflectionProperty(PendingRequest::class, 'client');
+    $type = $property->getType();
+    Http::fake();
+    $request = Http::safe();
+
+    expect($type === null || ($type instanceof ReflectionNamedType && $type->getName() === 'mixed'))->toBeTrue()
+        ->and($property->getValue($request))->toBeInstanceOf(GuardedClient::class)
+        ->and($request->buildClient())->toBe($property->getValue($request))
+        ->and(fn () => $request->withOptions(['handler' => static fn () => Create::promiseFor(new PsrResponse(200))])->get('https://hooks.example/'))
+        ->toThrow(UnsafeRequestOptions::class, '[handler]')
+        ->and(fn () => SafeFetch::guard(Http::withOptions(['handler' => new CurlHandler])))
+        ->toThrow(UnsafeRequestOptions::class, '[handler]');
+    Http::assertNothingSent();
 });
 
 it('lets the curl options that keep the connection where it is through', function (): void {

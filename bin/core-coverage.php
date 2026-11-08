@@ -14,6 +14,7 @@ $core = [
     'src/Support/HostPattern.php',
     'src/Support/AddressRanges.php',
     'src/Http/GuardMiddleware.php',
+    'src/Http/GuardedClient.php',
     'src/Support/CappedTransfer.php',
 ];
 

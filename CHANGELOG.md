@@ -14,7 +14,9 @@ Initial public release.
   address its host resolves to judged, the connection pinned to those addresses through curl
   (`CURLOPT_RESOLVE`), no proxy, no reused connection, and the address curl connected to checked
   before a byte is sent (libcurl 7.80+) and again afterwards. Works with `withToken()`, `retry()`,
-  `pool()` (guarded members stay concurrent) and other middleware.
+  `pool()` (guarded members stay concurrent) and other middleware. A Guzzle `handler` option, which
+  on Guzzle 7 would replace the whole stack, is refused wherever it is set (`Http::globalOptions()`,
+  `withOptions()` before or after `safe()`).
 - The blocked-network table: private, loopback, link-local and cloud metadata (169.254.169.254,
   `fd00:ec2::254`, 100.100.100.200, 192.0.0.192, 168.63.129.16), carrier-grade NAT, multicast,
   documentation, benchmarking and reserved ranges; IPv6 that carries IPv4 (mapped, compatible,

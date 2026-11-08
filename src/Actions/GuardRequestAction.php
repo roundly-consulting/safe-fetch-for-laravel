@@ -11,6 +11,7 @@ use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
+use RoundlyConsulting\SafeFetch\Http\GuardedClient;
 use RoundlyConsulting\SafeFetch\Http\GuardMiddleware;
 use RoundlyConsulting\SafeFetch\SafeFetchManager;
 use RoundlyConsulting\SafeFetch\Support\Clock;
@@ -34,7 +35,7 @@ final readonly class GuardRequestAction
 
     /**
      * @throws DestinationRejected (`cannot_pin`) without ext-curl: nothing could be pinned
-     * @throws UnsafeRequestOptions for a request that is already guarded or sent through a client of its own
+     * @throws UnsafeRequestOptions for a request that is already guarded, sent through a client of its own or given a `handler` option
      */
     public function execute(PendingRequest $request, DestinationPolicy $policy): PendingRequest
     {
@@ -42,20 +43,31 @@ final readonly class GuardRequestAction
             throw DestinationRejected::because(Reason::CannotPin, '');
         }
 
-        // A client set on the request replaces the whole handler stack, guard included.
-        if ((new ReflectionProperty(PendingRequest::class, 'client'))->getValue($request) !== null) {
-            throw UnsafeRequestOptions::option('client', 'a client set with setClient() replaces the handler stack the guard runs in.');
-        }
-
+        $property = new ReflectionProperty(PendingRequest::class, 'client');
+        $client = $property->getValue($request);
         $current = (new ReflectionProperty(PendingRequest::class, 'handler'))->getValue($request);
 
-        if ($current instanceof PinnedHandler) {
+        if ($client instanceof GuardedClient || $current instanceof PinnedHandler) {
             throw UnsafeRequestOptions::option('safe', 'the request is already guarded.');
         }
 
-        return $request
+        // A client set on the request replaces the whole handler stack, guard included.
+        if ($client !== null) {
+            throw UnsafeRequestOptions::option('client', 'a client set with setClient() replaces the handler stack the guard runs in.');
+        }
+
+        // So does a `handler` option on Guzzle 7 (`Http::globalOptions()`, `withOptions()`); one
+        // added after this call is refused by the guarded client when the request is sent.
+        GuardedClient::refuseHandler($request->getOptions());
+
+        $request
             ->setHandler($this->handlers->for($current))
             ->withoutRedirecting()
             ->withMiddleware(new GuardMiddleware($this->manager, $policy, $this->clock, $this->events));
+
+        // Not through setClient(): the guarded client is no Guzzle Client, which Guzzle keeps final.
+        $property->setValue($request, new GuardedClient($request));
+
+        return $request;
     }
 }

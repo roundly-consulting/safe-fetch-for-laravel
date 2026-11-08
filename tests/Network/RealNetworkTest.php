@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use GuzzleHttp\Handler\CurlHandler;
+use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Uri;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
@@ -13,6 +14,7 @@ use RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
+use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\Facades\SafeFetch;
 use RoundlyConsulting\SafeFetch\Support\CurlSupport;
 use RoundlyConsulting\SafeFetch\Tests\Support\Helpers;
@@ -382,6 +384,32 @@ it('starts a fresh file on every real hop', function (int $status): void {
         @unlink($path);
     }
 })->with([302, 307]);
+
+it('refuses a handler option however it reaches a guarded request', function (Closure $send): void {
+    // Guzzle 7 lets a request-level `handler` replace the whole stack — guard and pin included.
+    $loopback = "http://127.0.0.1:{$this->server->port}/hello.txt";
+    $thrown = Helpers::thrown(fn () => $send($loopback));
+
+    expect($thrown)->toBeInstanceOf(UnsafeRequestOptions::class)
+        ->and($thrown->getMessage())->toContain('[handler]')
+        ->and($this->server->requests())->toBe([]);
+})->with([
+    'withOptions after safe()' => [fn (string $url) => Http::safe(SafeFetch::policy()->allowHttp())->withOptions(['handler' => new CurlHandler])->get($url)],
+    'withOptions before safe()' => [fn (string $url) => Http::withOptions(['handler' => new CurlHandler])->safe(SafeFetch::policy()->allowHttp())->get($url)],
+    'global options' => [function (string $url) {
+        Http::globalOptions(['handler' => HandlerStack::create(new CurlHandler)]);
+
+        return Http::safe(SafeFetch::policy()->allowHttp())->get($url);
+    }],
+    'global options under fetch()' => [function (string $url) {
+        Http::globalOptions(['handler' => HandlerStack::create(new CurlHandler)]);
+
+        return SafeFetch::fetch($url, policy: SafeFetch::policy()->allowHttp());
+    }],
+    'a pooled request' => [fn (string $url) => Http::pool(fn (Pool $pool) => [
+        $pool->safe(SafeFetch::policy()->allowHttp())->withOptions(['handler' => new CurlHandler])->get($url),
+    ])[0]],
+]);
 
 it('network tests cannot be skipped on ci', function (): void {
     expect(Network::missing(ipv6: true))->toBeNull();
