@@ -214,3 +214,24 @@ it('maps a transport failure under the fake', function (): void {
         ->and($failure->host())->toBe('docs.example')
         ->and($failure->retryable())->toBeTrue();
 });
+
+it('decodes a fetched json body', function (): void {
+    Http::fake([
+        'docs.example/json' => Http::response(['data' => ['items' => [['id' => 7]], 'name' => 'feed']], 200),
+        'docs.example/broken' => Http::response('{not json', 200),
+        'docs.example/scalar' => Http::response('42', 200),
+    ]);
+
+    $page = SafeFetch::fetch('https://docs.example/json');
+    $broken = SafeFetch::fetch('https://docs.example/broken');
+
+    expect($page->json())->toBe(['data' => ['items' => [['id' => 7]], 'name' => 'feed']])
+        ->and($page->json('data.name'))->toBe('feed')
+        ->and($page->json('data.items.0.id'))->toBe(7)
+        ->and($page->json('data.missing', 'fallback'))->toBe('fallback')
+        ->and($page->json('data.name'))->toBe('feed')
+        ->and($broken->json())->toBeNull()
+        ->and($broken->json('a', 'fallback'))->toBe('fallback')
+        ->and(SafeFetch::fetch('https://docs.example/scalar')->json())->toBe(42)
+        ->and((new FetchedResponse(200, '', null, 'https://docs.example/', []))->json())->toBeNull();
+});
