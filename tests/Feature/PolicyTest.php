@@ -11,6 +11,7 @@ use RoundlyConsulting\SafeFetch\Events\DestinationRefused;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
 use RoundlyConsulting\SafeFetch\Facades\SafeFetch;
+use RoundlyConsulting\SafeFetch\Support\PrivateNetworks;
 use RoundlyConsulting\SafeFetch\Tests\Support\Helpers;
 
 function blockedBy(Closure $call): ?string
@@ -428,4 +429,32 @@ it('replaces the allowlist as documented', function (): void {
     expect($policy->allowedHosts)->toBe(['b.example'])
         ->and(SafeFetch::vet('https://b.example/', $policy)->host)->toBe('b.example')
         ->and(Helpers::refusal(fn () => SafeFetch::vet('https://a.example/', $policy))->reason())->toBe(Reason::NotAllowed);
+});
+
+it('never exempts a metadata address for a private host', function (string $address): void {
+    SafeFetch::fakeDns(['meta.internal' => $address, 'minio.internal' => '10.0.0.7']);
+    $policy = SafeFetch::policy()->trustPrivateHosts(['meta.internal', 'minio.internal']);
+
+    expect(blockedBy(fn () => SafeFetch::vet('https://meta.internal/latest/meta-data/', $policy)))->toBe('private_address')
+        ->and(SafeFetch::vet('https://minio.internal/', $policy)->addresses)->toBe(['10.0.0.7'])
+        ->and(PrivateNetworks::isMetadata($address))->toBeTrue();
+})->with([
+    'aws, gcp, azure, openstack' => '169.254.169.254',
+    'aws ipv6' => 'fd00:ec2::254',
+    'alibaba' => '100.100.100.200',
+    'oracle' => '192.0.0.192',
+    'azure wireserver' => '168.63.129.16',
+    'ipv4-mapped' => '::ffff:169.254.169.254',
+    'nat64' => '64:ff9b::a9fe:a9fe',
+]);
+
+it('exempts a metadata address only through an allowed range', function (): void {
+    SafeFetch::fakeDns(['meta.internal' => '169.254.169.254']);
+
+    expect(SafeFetch::vet('https://meta.internal/', SafeFetch::policy()->allowRanges(['169.254.169.254/32']))->addresses)->toBe(['169.254.169.254'])
+        ->and(SafeFetch::vet('https://meta.internal/', SafeFetch::policy()->trustPrivateHosts(['meta.internal'])->allowRanges(['169.254.0.0/16']))->addresses)->toBe(['169.254.169.254'])
+        ->and(blockedBy(fn () => SafeFetch::vet('https://meta.internal/', SafeFetch::policy()->trustPrivateHosts(['meta.internal'])->allowRanges(['10.0.0.0/8']))))->toBe('private_address')
+        ->and(PrivateNetworks::isMetadata('169.254.169.253'))->toBeFalse()
+        ->and(PrivateNetworks::isMetadata('10.0.0.1'))->toBeFalse()
+        ->and(PrivateNetworks::isMetadata('not an address'))->toBeFalse();
 });

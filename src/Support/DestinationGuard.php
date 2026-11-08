@@ -22,7 +22,9 @@ use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
  *    on it); `localhost` / `*.localhost` not listed as a private host → `blocked` (`hostname`);
  * 5. resolve the name **once**; no address → `unresolved`;
  * 6. every address: in a blocked range → `blocked` (`blocked_range`); private and neither in an
- *    allowed range nor the name a private host → `blocked` (`private_address`).
+ *    allowed range nor the name a private host → `blocked` (`private_address`). A private host
+ *    never exempts a cloud-metadata address ({@see PrivateNetworks::METADATA}): only an allowed
+ *    range does.
  *
  * One private answer blocks the whole name.
  *
@@ -102,7 +104,10 @@ final readonly class DestinationGuard
                 throw DestinationRejected::because(Reason::Blocked, $url, $host, 'blocked_range');
             }
 
-            if (PrivateNetworks::isPrivate($address) && ! $privateHost && ! AddressRanges::contains($policy->allowedRanges, $address)) {
+            $exempt = AddressRanges::contains($policy->allowedRanges, $address)
+                || ($privateHost && ! PrivateNetworks::isMetadata($address));
+
+            if (PrivateNetworks::isPrivate($address) && ! $exempt) {
                 throw DestinationRejected::because(Reason::Blocked, $url, $host, 'private_address');
             }
         }

@@ -63,6 +63,22 @@ final class PrivateNetworks
         ['range' => '2002::/16', 'offset' => 2],         // 6to4: 2002:AABB:CCDD::/48 carries AA.BB.CC.DD
     ];
 
+    /**
+     * The cloud-metadata endpoints. All are in the table above; these are also never exempted by a
+     * private host (`hosts.private`) — only an allowed range names them back in. A name trusted to
+     * resolve privately that answers with one is misconfigured or poisoned DNS, and these are the
+     * addresses that hand out credentials.
+     *
+     * @var list<string>
+     */
+    public const array METADATA = [
+        '169.254.169.254',  // AWS, GCP, Azure, OpenStack
+        'fd00:ec2::254',    // AWS over IPv6
+        '100.100.100.200',  // Alibaba Cloud
+        '192.0.0.192',      // Oracle Cloud
+        '168.63.129.16',    // Azure WireServer
+    ];
+
     /** @var list<string> Host names refused by spelling, before any lookup (a trailing dot stripped, any case). */
     public const array BLOCKED_HOSTNAMES = ['localhost'];
 
@@ -98,6 +114,12 @@ final class PrivateNetworks
         }
 
         return false;
+    }
+
+    /** Whether `$address` — or the IPv4 address it carries — is a cloud-metadata endpoint ({@see self::METADATA}). */
+    public static function isMetadata(string $address): bool
+    {
+        return AddressRanges::contains(self::METADATA, $address);
     }
 
     /** Whether a host name always means the machine itself (`localhost`, `*.localhost`). */

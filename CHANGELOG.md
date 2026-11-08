@@ -22,8 +22,9 @@ Initial public release.
   `*.localhost` by name. Shared with the Node twin through one contract fixture.
 - A policy (`DestinationPolicy`, `config/safe-fetch.php`): https only by default, ports, a strict
   host allowlist (`allowHosts()` replaces it and refuses an empty list, so a list that happens to
-  be empty never opens the guard), blocked hosts, the app's own hosts, private-host exemptions (still resolved and
-  pinned), allowed and blocked address ranges, and a response cap (`maxResponseBytes`) that cuts
+  be empty never opens the guard), blocked hosts, the app's own hosts, private-host exemptions
+  (still resolved and pinned, and never for a cloud-metadata address — only an allowed range
+  names one back in), allowed and blocked address ranges, and a response cap (`maxResponseBytes`) that cuts
   a body and marks it `Safe-Fetch-Truncated: 1` (`SafeFetch::truncated($response)` reads it,
   `SafeFetchManager::TRUNCATED_HEADER` names it). `blockAppHosts()` switches the app-host block
   on or off over whatever the configuration says. `withoutHostAllowlist()`,
