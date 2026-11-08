@@ -117,6 +117,46 @@ it('starts a fresh file on every hop', function (): void {
         ->and(file_get_contents($this->path))->toBe('final body');
 });
 
+it('keeps the previous file whole until a download succeeds', function (): void {
+    file_put_contents($this->path, 'old');
+    chmod($this->path, 0640);
+    $during = [];
+    Http::fake([
+        'files.example/broken' => Http::response('error page', 503),
+        'files.example/*' => function () use (&$during) {
+            $during[] = file_get_contents($this->path);
+
+            return Http::response('new body');
+        },
+    ]);
+
+    $refusal = Helpers::refusal(fn () => SafeFetch::download('https://files.example/broken', $this->path));
+    $kept = file_get_contents($this->path);
+    $file = SafeFetch::download('https://files.example/fresh', $this->path);
+    clearstatcache();
+
+    expect($refusal)->toBeInstanceOf(FetchFailed::class)
+        ->and($kept)->toBe('old')
+        ->and($during)->not->toBeEmpty()->each->toBe('old')
+        ->and($file->bytes)->toBe(8)
+        ->and(file_get_contents($this->path))->toBe('new body')
+        ->and(fileperms($this->path) & 0777)->toBe(0640)
+        ->and(array_values(array_diff(scandir($this->dir) ?: [], ['.', '..'])))->toBe(['file.bin']);
+});
+
+it('cleans up when the finished download cannot be moved into place', function (): void {
+    Http::fake(['files.example/*' => function () {
+        mkdir($this->path);
+
+        return Http::response('body');
+    }]);
+
+    expect(fn () => SafeFetch::download('https://files.example/', $this->path))
+        ->toThrow(RuntimeException::class, 'could not be moved into place')
+        ->and(array_values(array_diff(scandir($this->dir) ?: [], ['.', '..'])))->toBe(['file.bin'])
+        ->and(is_dir($this->path))->toBeTrue();
+});
+
 it('leaves a file it never started alone', function (): void {
     file_put_contents($this->path, 'keep me');
     Http::fake();

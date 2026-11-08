@@ -14,15 +14,18 @@ use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
 use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\Support\CappedSink;
 use RoundlyConsulting\SafeFetch\Support\CappedTransfer;
+use RuntimeException;
 use Throwable;
 
 /**
  * GET a URL into a file — `SafeFetch::download()`: guarded and capped exactly like `fetch()`, its
  * body streamed to disk instead of held in memory, so a large file costs no memory.
  *
- * Every hop writes to `$path` afresh (a redirect's body never lands there). On any failure the
- * file this download started is deleted: a partial or refused body is never left behind. Nothing
- * is written before the first hop passed the guard.
+ * The body goes to a temporary file next to `$path` — every hop starts it afresh, so a redirect's
+ * body never lands there — and replaces `$path` only once the download succeeded. A file already
+ * at `$path` stays whole until then (readers never see it truncated or half written) and is left
+ * alone on any failure; the temporary file is deleted. Nothing is written before the first hop
+ * passed the guard.
  */
 final readonly class DownloadUrlAction
 {
@@ -45,24 +48,43 @@ final readonly class DownloadUrlAction
             throw new InvalidArgumentException('A download needs a file path in an existing, writable directory.');
         }
 
-        $started = false;
+        $temporary = null;
 
         try {
-            $done = $this->transfer->run($url, $options, $policy, static function (int $maxBytes) use ($path, &$started): CappedSink {
-                $started = true;
+            $done = $this->transfer->run($url, $options, $policy, static function (int $maxBytes) use ($directory, $path, &$temporary): CappedSink {
+                // Created on the first hop, never before the guard passed it; by tempnam(), which
+                // makes a new file of its own (a name planted in the directory is never followed).
+                $temporary ??= self::temporaryFile($directory, $path);
 
-                return CappedSink::toFile($path, $maxBytes);
+                return CappedSink::toFile($temporary, $maxBytes);
             }, 'download');
+
+            $done->sink->flush();
+            // The file keeps the mode the one it replaces had; a new one gets the umask's.
+            chmod($temporary, file_exists($path) ? fileperms($path) & 0777 : 0666 & ~umask());
+
+            if (! @rename($temporary, $path)) {
+                throw new RuntimeException('The download could not be moved into place.');
+            }
         } catch (Throwable $exception) {
-            if ($started && is_file($path)) {
-                unlink($path);
+            if ($temporary !== null && is_file($temporary)) {
+                unlink($temporary);
             }
 
             throw $exception;
         }
 
-        $done->sink->flush();
-
         return new DownloadedFile($done->status(), $path, $done->sink->written, $done->contentType(), $done->url, $done->headers());
+    }
+
+    private static function temporaryFile(string $directory, string $path): string
+    {
+        $temporary = @tempnam($directory, '.'.basename($path).'.');
+
+        if ($temporary === false) {
+            throw new RuntimeException('The download file could not be created.');
+        }
+
+        return $temporary;
     }
 }
