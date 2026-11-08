@@ -28,6 +28,7 @@ use RoundlyConsulting\SafeFetch\Testing\SafeFetchFake;
  * @method static void assertFetched(string|\Closure $url)
  * @method static void assertNothingFetched()
  * @method static void assertNothingVetted()
+ * @method static void assertNothingRefused()
  * @method static void assertGuardedRequestSent(\Closure|null $callback = null)
  *
  * @see SafeFetchManager

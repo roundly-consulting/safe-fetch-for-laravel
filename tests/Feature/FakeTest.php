@@ -187,3 +187,21 @@ it('records refusals through the facade too', function (): void {
     expect(fn () => SafeFetch::vet('https://10.0.0.1/'))->toThrow(DestinationRejected::class);
     SafeFetch::assertRefused('https://10.0.0.1/', Reason::Blocked);
 });
+
+it('asserts nothing was refused', function (): void {
+    $fake = SafeFetch::fake(['inward.example' => '10.0.0.5']);
+
+    SafeFetch::assertNothingRefused();
+
+    SafeFetch::vet('https://hooks.example/');
+    SafeFetch::allows('https://other.example/');
+    SafeFetch::assertNothingRefused();
+
+    SafeFetch::allows('https://inward.example/secret');
+    SafeFetch::allows('http://hooks.example/');
+
+    expect(fn () => $fake->assertNothingRefused())->toThrow(
+        ExpectationFailedException::class,
+        'Expected nothing to be refused, but 2 URL(s) were: https://inward.example/secret (blocked), http://hooks.example/ (scheme).',
+    );
+});

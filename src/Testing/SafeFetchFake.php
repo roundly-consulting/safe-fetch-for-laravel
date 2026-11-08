@@ -166,6 +166,16 @@ final class SafeFetchFake extends SafeFetchManager
         PHPUnit::assertSame(0, $count, "Expected nothing to be fetched, but {$count} URL(s) were: ".implode(', ', $this->fetches).'.');
     }
 
+    /** No verdict so far was a refusal — every URL vetted, allowed, prechecked or sent passed. */
+    public function assertNothingRefused(): void
+    {
+        $refused = array_values(array_filter($this->vets, static fn (RecordedVet $vet): bool => $vet->refused()));
+        $count = count($refused);
+
+        PHPUnit::assertSame(0, $count, "Expected nothing to be refused, but {$count} URL(s) were: "
+            .implode(', ', array_map(static fn (RecordedVet $vet): string => "{$vet->url} ({$vet->reason?->value})", $refused)).'.');
+    }
+
     public function assertNothingVetted(): void
     {
         $count = count($this->vets);
