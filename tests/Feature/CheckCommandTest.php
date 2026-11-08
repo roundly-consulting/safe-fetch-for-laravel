@@ -85,3 +85,56 @@ it('check reports the pre send check off where guzzle deprecates it', function (
         ->expectsOutputToContain('checked after the request only')
         ->assertExitCode(0);
 });
+
+/**
+ * @return array<string, mixed>
+ */
+function checkJson(array $arguments, int $exitCode): array
+{
+    expect(Artisan::call('safe-fetch:check', [...$arguments, '--json' => true]))->toBe($exitCode);
+
+    return json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+}
+
+it('prints the verdict as json', function (): void {
+    expect(checkJson(['url' => 'https://docs.example/a'], 0))->toBe([
+        'allowed' => true,
+        'url' => 'https://docs.example/a',
+        'addresses' => ['93.184.216.34', '2606:4700::1111'],
+        'pinned_as' => 'docs.example:443:93.184.216.34,[2606:4700::1111]',
+    ])
+        ->and(checkJson(['url' => 'https://intranet.example/'], 1))->toBe(['allowed' => false, 'reason' => 'blocked', 'retryable' => false, 'blocked_by' => 'private_address'])
+        ->and(checkJson(['url' => 'https://unknown.example/'], 1))->toBe(['allowed' => false, 'reason' => 'unresolved', 'retryable' => true, 'blocked_by' => null])
+        ->and(checkJson(['url' => 'http://93.184.216.34/', '--http' => true], 0)['pinned_as'])->toBeNull();
+});
+
+it('prints the doctor as json without trusted names', function (): void {
+    app()->detectEnvironment(static fn (): string => 'production');
+    config()->set('safe-fetch.allow_http', true);
+    config()->set('safe-fetch.hosts.private', ['minio.internal']);
+    config()->set('safe-fetch.ranges.allowed', ['10.0.0.0/7']);
+
+    $report = checkJson([], 0);
+
+    expect(array_keys($report))->toBe(['dns_pinning', 'curl', 'pre_send_check', 'international_host_names', 'guzzle', 'configuration_valid', 'errors', 'warnings'])
+        ->and($report['dns_pinning'])->toBeTrue()
+        ->and($report['curl'])->toBe(CurlSupport::curlVersion())
+        ->and($report['configuration_valid'])->toBeTrue()
+        ->and($report['errors'])->toBe([])
+        ->and($report['warnings'])->toHaveCount(2)
+        ->and(json_encode($report))->not->toContain('minio.internal')
+        ->not->toContain('10.0.0.0');
+});
+
+it('prints a failing doctor as json', function (): void {
+    CurlSupport::assume(available: false);
+    config()->set('safe-fetch.allow_http', 'sometimes');
+
+    $report = checkJson([], 1);
+
+    expect($report['dns_pinning'])->toBeFalse()
+        ->and($report['configuration_valid'])->toBeFalse()
+        ->and($report['errors'])->toHaveCount(2)
+        ->and($report['errors'][1])->toContain('The configuration is invalid')
+        ->and($report['warnings'])->toBe([]);
+});
