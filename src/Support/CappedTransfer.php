@@ -7,7 +7,10 @@ namespace RoundlyConsulting\SafeFetch\Support;
 use Carbon\CarbonImmutable;
 use Carbon\Exceptions\InvalidFormatException;
 use Closure;
+use GuzzleHttp\Exception\TransferException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
@@ -18,11 +21,9 @@ use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
 use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
-use RoundlyConsulting\SafeFetch\Exceptions\SafeFetchException;
 use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\SafeFetchManager;
 use RuntimeException;
-use Throwable;
 
 /**
  * One guarded GET whose 2xx body goes through a byte cap into a sink — what `SafeFetch::fetch()`
@@ -131,9 +132,9 @@ final readonly class CappedTransfer
 
         try {
             $response = $request->get($url);
-        } catch (SafeFetchException|UnsafeRequestOptions $exception) {
-            throw $exception;
-        } catch (Throwable $exception) {
+        } catch (ConnectionException|RequestException|TransferException $exception) {
+            // Only a transport failure is mapped; anything else — a refusal of the guard, the
+            // fake's or a stray request's exception, a programmer error — reaches the caller as thrown.
             $host = $progress->hop->host ?? '';
             $response = $progress->headersOnly instanceof ResponseInterface ? new Response($progress->headersOnly) : null;
 

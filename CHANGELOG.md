@@ -40,7 +40,9 @@ Initial public release.
   also sends named headers (a webhook signature) to another origin in one call; the
   `forwardHeaders()`, `allowingDowngrade()` and `max()` withers change one setting each.
 - `SafeFetch::fetch()`: a GET into memory with a byte cap (decoded bytes, so a compressed bomb
-  stops too) and failures that say whether a retry can help (`retryable()`, `retryAfter()`);
+  stops too) and transport failures that say whether a retry can help (`retryable()`,
+  `retryAfter()`), with a cause naming the curl code but never the URL; anything else (the fake's
+  `LogicException`, a stray request, a programmer error) is thrown as is.
   `FetchedResponse::json()` decodes the body (null when it is not JSON).
 - `SafeFetch::download()`: the same capped, guarded GET streamed to a file instead of memory
   (`DownloadedFile`: path, bytes, content type, final URL, headers); the body lands in a temporary

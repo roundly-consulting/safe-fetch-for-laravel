@@ -7,12 +7,14 @@ namespace RoundlyConsulting\SafeFetch\Support;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
 use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
+use RuntimeException;
 use SensitiveParameter;
 use Throwable;
 
 /**
  * A transport failure of `SafeFetch::fetch()` as a status-aware exception, by its curl code. The
- * underlying exception is not chained: its message can name the URL and the address it connected to.
+ * underlying exception is not chained as is — its message can name the URL and the address it
+ * connected to — but as a cause that names only its class and curl code, for whoever operates it.
  *
  * @internal
  */
@@ -24,14 +26,15 @@ final class TransportFailure
     public static function from(Throwable $exception, #[SensitiveParameter] string $url, string $host): FetchFailed|DestinationUnavailable
     {
         $code = self::curlCode($exception);
+        $cause = new RuntimeException($exception::class.($code === null ? '' : " (cURL error {$code})"));
 
         return match (true) {
-            $code === 28 => FetchFailed::because(Reason::Timeout, $url, $host),
-            $code === 6 => DestinationUnavailable::unresolved($url, $host),
-            $code !== null && in_array($code, self::TLS_ERRORS, true) => FetchFailed::because(Reason::Tls, $url, $host),
-            $code !== null => FetchFailed::because(Reason::Connection, $url, $host),
+            $code === 28 => FetchFailed::because(Reason::Timeout, $url, $host, $cause),
+            $code === 6 => DestinationUnavailable::unresolved($url, $host, $cause),
+            $code !== null && in_array($code, self::TLS_ERRORS, true) => FetchFailed::because(Reason::Tls, $url, $host, $cause),
+            $code !== null => FetchFailed::because(Reason::Connection, $url, $host, $cause),
             // No curl code: the answer arrived but was not HTTP Guzzle could read (a status outside 100–599).
-            default => FetchFailed::because(Reason::Protocol, $url, $host),
+            default => FetchFailed::because(Reason::Protocol, $url, $host, $cause),
         };
     }
 

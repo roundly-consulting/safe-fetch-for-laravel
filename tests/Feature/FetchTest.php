@@ -7,6 +7,7 @@ use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Psr7\Request as PsrRequest;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\StrayRequestException;
 use Illuminate\Support\Facades\Http;
 use RoundlyConsulting\SafeFetch\DataTransferObjects\FetchedResponse;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
@@ -98,7 +99,10 @@ it('classifies transport failures by curl code', function (int $code, Reason $re
     expect($failure)->toBeInstanceOf($class)
         ->and($failure->reason())->toBe($reason)
         ->and($failure->retryable())->toBe($retryable)
-        ->and($failure->getPrevious())->toBeNull();
+        // The cause is kept, without Guzzle's message: it can name the URL and the address.
+        ->and($failure->getPrevious()?->getMessage())->toBe(ConnectionException::class." (cURL error {$code})")
+        ->and($failure->getPrevious()?->getPrevious())->toBeNull()
+        ->and($failure->getMessage().$failure->getPrevious()?->getMessage())->not->toContain('docs.example')->not->toContain('93.184.216.34');
 })->with([
     'timeout' => [28, Reason::Timeout, FetchFailed::class, true],
     'unresolved' => [6, Reason::Unresolved, DestinationUnavailable::class, true],
@@ -214,6 +218,34 @@ it('maps a transport failure under the fake', function (): void {
         ->and($failure->host())->toBe('docs.example')
         ->and($failure->retryable())->toBeTrue();
 });
+
+it('lets a throwable that is no transport failure through as thrown', function (Closure $arrange, Closure $call, string $class, string $message): void {
+    $arrange();
+    $path = sys_get_temp_dir().'/safe-fetch-kept-'.bin2hex(random_bytes(4));
+    file_put_contents($path, 'keep me');
+
+    try {
+        $thrown = Helpers::thrown(fn () => $call($path));
+        $kept = file_get_contents($path);
+    } finally {
+        @unlink($path);
+    }
+
+    expect($thrown)->toBeInstanceOf($class)
+        ->and($thrown->getMessage())->toContain($message)
+        ->and($kept)->toBe('keep me');
+})->with([
+    'fetch() under SafeFetch::fake() without Http::fake()' => [
+        fn () => SafeFetch::fake(), fn () => SafeFetch::fetch('https://docs.example/'), LogicException::class, 'answer it with Http::fake()',
+    ],
+    'download() under SafeFetch::fake() without Http::fake()' => [
+        fn () => SafeFetch::fake(), fn (string $path) => SafeFetch::download('https://docs.example/', $path), LogicException::class, 'answer it with Http::fake()',
+    ],
+    'a stray request' => [
+        fn () => Http::fake(['cdn.example/*' => Http::response('x')])->preventStrayRequests(),
+        fn () => SafeFetch::fetch('https://docs.example/'), StrayRequestException::class, 'docs.example',
+    ],
+]);
 
 it('decodes a fetched json body', function (): void {
     Http::fake([
