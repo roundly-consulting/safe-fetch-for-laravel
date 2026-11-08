@@ -20,6 +20,10 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
   when the address was private. The policy carries it as `DestinationPolicy::$appAddresses`.
 - `SafeFetch::truncated()` no longer reports a whole body as cut when the server itself sent a
   `Safe-Fetch-Truncated` header: the guard strips that header from every upstream response.
+- `SafeFetch::fetch()` and `SafeFetch::download()` now report a body they could not store (a full
+  disk) as a local `RuntimeException`, on both Guzzle majors. It used to surface as a retryable
+  `FetchFailed` (`connection`), a `FetchFailed` (`protocol`) or a PHP `fwrite()` notice. `download()`
+  still deletes its temporary file.
 
 ## 1.0.0 - 2026-11-08
 

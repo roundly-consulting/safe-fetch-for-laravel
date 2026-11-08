@@ -10,6 +10,7 @@ use RoundlyConsulting\SafeFetch\DataTransferObjects\DownloadedFile;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
+use RoundlyConsulting\SafeFetch\Exceptions\SafeFetchException;
 use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\Facades\SafeFetch;
 use RoundlyConsulting\SafeFetch\Tests\Support\Helpers;
@@ -102,6 +103,18 @@ it('removes the file when the transfer fails', function (): void {
 
     expect($refusal->reason())->toBe(Reason::Timeout)
         ->and(file_exists($this->path))->toBeFalse();
+});
+
+it('calls a write that failed on a full disk a local error and removes the file', function (): void {
+    Http::fake(['files.example/*' => Http::response(str_repeat('x', 65_536))]);
+
+    $thrown = Helpers::withFullDisk(1024, fn () => Helpers::thrown(fn () => SafeFetch::download('https://files.example/', $this->path)));
+
+    expect($thrown)->toBeInstanceOf(RuntimeException::class)
+        ->and($thrown)->not->toBeInstanceOf(SafeFetchException::class)
+        ->and($thrown->getMessage())->toBe('The response body could not be written.')
+        ->and(file_exists($this->path))->toBeFalse()
+        ->and(glob($this->dir.'/.file.bin.*'))->toBe([]);
 });
 
 it('starts a fresh file on every hop', function (): void {

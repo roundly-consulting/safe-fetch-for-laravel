@@ -9,6 +9,7 @@ use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\RequestInterface;
 use RoundlyConsulting\SafeFetch\Contracts\HostResolver;
@@ -17,6 +18,7 @@ use RoundlyConsulting\SafeFetch\DataTransferObjects\RedirectPolicy;
 use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
+use RoundlyConsulting\SafeFetch\Exceptions\SafeFetchException;
 use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\Facades\SafeFetch;
 use RoundlyConsulting\SafeFetch\Support\CurlSupport;
@@ -416,6 +418,23 @@ it('streams a real download to disk under the cap', function (): void {
             ->and($peak)->toBeLessThan(2 * 1048576);
     } finally {
         @unlink($path);
+    }
+});
+
+it('calls a real download that failed on a full disk a local error and removes the file', function (): void {
+    $dir = sys_get_temp_dir().'/safe-fetch-full-disk-'.bin2hex(random_bytes(4));
+    mkdir($dir);
+    $path = $dir.'/file.bin';
+
+    try {
+        $thrown = Helpers::withFullDisk(1024, fn () => Helpers::thrown(fn () => SafeFetch::download($this->server->url('pin.invalid', '/large?bytes=65536'), $path, policy: networkPolicy())));
+
+        expect($thrown)->toBeInstanceOf(RuntimeException::class)
+            ->and($thrown)->not->toBeInstanceOf(SafeFetchException::class)
+            ->and($thrown->getMessage())->toBe('The response body could not be written.')
+            ->and(scandir($dir))->toBe(['.', '..']);
+    } finally {
+        File::deleteDirectory($dir);
     }
 });
 

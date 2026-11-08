@@ -16,6 +16,9 @@ use RuntimeException;
  * its length, compressed: the count is of decoded bytes) — whereas a failed write only throws
  * inside curl's callback. `Http::fake()` writes a stub's body through the same handle.
  *
+ * A write the memory or file itself refuses (a full disk) is no budget matter: it marks the sink
+ * {@see self::$failed}, so the transfer is reported as the local failure it is, not a remote one.
+ *
  * @internal
  */
 final class CappedSink
@@ -23,6 +26,9 @@ final class CappedSink
     public int $written = 0;
 
     public bool $exceeded = false;
+
+    /** Whether a write to the memory or file failed (a full disk): nothing is kept from then on. */
+    public bool $failed = false;
 
     /** @var resource the handle Guzzle writes to (a {@see CappedSinkStream}) */
     public readonly mixed $resource;
@@ -77,14 +83,20 @@ final class CappedSink
             $data = substr($data, 0, max(0, $room));
         }
 
-        if ($data === '') {
+        if ($data === '' || $this->failed) {
             return 0;
         }
 
-        $written = (int) fwrite($this->memory, $data);
-        $this->written += $written;
+        // Silenced: the failure is reported once, by the transfer, as a local error.
+        $written = @fwrite($this->memory, $data);
 
-        return $written;
+        if ($written === false || $written < strlen($data)) {
+            $this->failed = true;
+        }
+
+        $this->written += (int) $written;
+
+        return (int) $written;
     }
 
     /** Empty the buffer for the next hop. */

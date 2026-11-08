@@ -34,6 +34,9 @@ use RuntimeException;
  * Only a 2xx body is read. Any other answer is judged by its status and headers alone: the transfer
  * stops before its body, so a 503 with a huge error page stays a retryable 503.
  *
+ * A body the sink could not store (a full disk) is a local failure, not the server's: a plain
+ * `RuntimeException`, never a retryable `FetchFailed`.
+ *
  * @internal
  */
 final readonly class CappedTransfer
@@ -52,6 +55,7 @@ final readonly class CappedTransfer
      * @throws FetchFailed
      * @throws UnsafeRequestOptions for a Host header
      * @throws InvalidArgumentException for a cap or timeout out of range
+     * @throws RuntimeException when the body could not be stored (a full disk)
      */
     public function run(string $url, FetchOptions $options, DestinationPolicy $policy, Closure $sinkForHop, string $via): CompletedTransfer
     {
@@ -133,6 +137,9 @@ final readonly class CappedTransfer
         try {
             $response = $request->get($url);
         } catch (ConnectionException|RequestException|TransferException $exception) {
+            // A write the sink could not store aborted the transfer: ours, not the connection's.
+            self::refuseUnwritten($progress->sink);
+
             // Only a transport failure is mapped; anything else — a refusal of the guard, the
             // fake's or a stray request's exception, a programmer error — reaches the caller as thrown.
             $host = $progress->hop->host ?? '';
@@ -160,6 +167,7 @@ final readonly class CappedTransfer
 
         $sink = $progress->sink;
         self::throughTheCap($response, $sink);
+        self::refuseUnwritten($sink);
 
         if ($sink->exceeded) {
             throw FetchFailed::because(Reason::TooLarge, $url, $host);
@@ -188,6 +196,16 @@ final readonly class CappedTransfer
 
         while (! $body->eof() && ! $sink->exceeded && ($chunk = $body->read(1_048_576)) !== '') {
             $sink->write($chunk);
+        }
+    }
+
+    /**
+     * @throws RuntimeException when a write to the sink failed
+     */
+    private static function refuseUnwritten(CappedSink $sink): void
+    {
+        if ($sink->failed) {
+            throw new RuntimeException('The response body could not be written.');
         }
     }
 
