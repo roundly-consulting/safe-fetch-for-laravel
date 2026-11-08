@@ -103,7 +103,9 @@ final class AddressRanges
 
     /**
      * Whether any of `$ranges` covers `$address` — or the IPv4 address it carries, so
-     * `127.0.0.1/32` covers `::ffff:127.0.0.1`.
+     * `127.0.0.1/32` covers `::ffff:127.0.0.1`. An IPv6 range inside a prefix that carries IPv4
+     * covers the IPv4 addresses it carries too ({@see self::carriedIpv4Range()}), so
+     * `::ffff:8.8.8.0/120` covers `8.8.8.8`.
      *
      * @param  list<string>  $ranges
      */
@@ -123,14 +125,44 @@ final class AddressRanges
         }
 
         foreach ($ranges as $range) {
+            $range = self::asRange($range);
+            $carriedRange = self::carriedIpv4Range($range);
+
             foreach ($candidates as $candidate) {
-                if (self::bytesInRange($candidate, self::asRange($range))) {
+                if (self::bytesInRange($candidate, $range) || ($carriedRange !== null && self::bytesInRange($candidate, $carriedRange))) {
                     return true;
                 }
             }
         }
 
         return false;
+    }
+
+    /**
+     * The IPv4 range an IPv6 range inside a prefix that carries IPv4 ({@see PrivateNetworks::IPV4_EMBEDDING})
+     * stands for — `::ffff:8.8.8.0/120` is `8.8.8.0/24`, `2002:808:800::/40` is `8.8.8.0/24`. Null
+     * for an IPv4 range, one outside every such prefix, and one that holds a prefix whole
+     * (`2002::/16`): blocking 6to4 is not blocking every IPv4 address.
+     */
+    private static function carriedIpv4Range(string $range): ?string
+    {
+        [$network, $prefix] = explode('/', $range, 2);
+        $prefix = (int) $prefix;
+        $bytes = self::bytes($network);
+
+        if ($bytes === null || strlen($bytes) !== 16) {
+            return null;
+        }
+
+        foreach (PrivateNetworks::IPV4_EMBEDDING as $embedding) {
+            $carrierPrefix = (int) explode('/', $embedding['range'], 2)[1];
+
+            if ($prefix > $carrierPrefix && self::bytesInRange($bytes, $embedding['range'])) {
+                return ((string) inet_ntop(substr($bytes, $embedding['offset'], 4))).'/'.min(32, $prefix - $embedding['offset'] * 8);
+            }
+        }
+
+        return null;
     }
 
     /**

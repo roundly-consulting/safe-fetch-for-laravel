@@ -261,6 +261,40 @@ it('allows a carried ipv4 range only as wide as it carries', function (): void {
         ->and(SafeFetch::allows('https://[64:ff9b::7f00:1]/', $policy))->toBeFalse();
 });
 
+it('blocks a plain ipv4 address under an ipv6 range that carries it', function (string $range, string $outside): void {
+    SafeFetch::fakeDns(['eight.example' => '8.8.8.8']);
+    $policy = SafeFetch::policy()->blockRanges([$range]);
+
+    expect(blockedBy(fn () => SafeFetch::vet('https://8.8.8.8/', $policy)))->toBe('blocked_range')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://eight.example/', $policy)))->toBe('blocked_range')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://[64:ff9b::808:808]/', $policy)))->toBe('blocked_range')
+        ->and(blockedBy(fn () => SafeFetch::vet('https://[::ffff:8.8.8.8]/', $policy)))->toBe('blocked_range')
+        ->and(SafeFetch::allows("https://{$outside}/", $policy))->toBeTrue();
+})->with([
+    'mapped address' => ['::ffff:8.8.8.8', '8.8.8.9'],
+    'mapped range' => ['::ffff:8.8.8.0/120', '8.8.9.8'],
+    'nat64 range' => ['64:ff9b::808:800/120', '8.8.9.8'],
+    'compatible address' => ['::808:808', '8.8.8.9'],
+    'translated address' => ['::ffff:0:808:808', '8.8.8.9'],
+    '6to4 range' => ['2002:808:800::/40', '8.8.9.8'],
+]);
+
+it('reads a configured ipv6 range that carries ipv4 by the ipv4 it carries', function (): void {
+    config()->set('safe-fetch.ranges.blocked', ['::ffff:8.8.8.8']);
+    config()->set('safe-fetch.ranges.allowed', ['::ffff:10.0.0.0/104']);
+
+    expect(blockedBy(fn () => SafeFetch::vet('https://8.8.8.8/')))->toBe('blocked_range')
+        ->and(SafeFetch::vet('https://10.1.2.3/')->addresses)->toBe(['10.1.2.3'])
+        ->and(blockedBy(fn () => SafeFetch::vet('https://127.0.0.1/')))->toBe('private_address');
+});
+
+it('keeps a blocked range that holds a whole ipv4 carrier to its ipv6 forms', function (string $range): void {
+    $policy = SafeFetch::policy()->blockRanges([$range]);
+
+    expect(SafeFetch::allows('https://8.8.8.8/', $policy))->toBeTrue()
+        ->and(blockedBy(fn () => SafeFetch::vet('https://[2002:808:808::]/', $policy)))->toBe('blocked_range');
+})->with(['2002::/16', '2000::/3']);
+
 it('refuses a policy it could not apply as written', function (Closure $build, string $message): void {
     expect($build)->toThrow(InvalidArgumentException::class, $message);
 })->with([
