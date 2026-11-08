@@ -10,11 +10,10 @@ use RoundlyConsulting\SafeFetch\Support\RedirectLocation;
 use RoundlyConsulting\SafeFetch\Tests\Support\ContractPolicy;
 
 /*
- * The blocked-network contract. This package holds the reference copy: `tests/Fixtures/contract/
- * blocked-networks.json` is copied byte-identical into the Node twin (safe-fetch-for-node,
- * `tests/goldens/contract/`) and `./parity.sh safe-fetch` fails the moment they differ. Both
- * sides run every vector, so the PHP guard and the Node guard cannot disagree about what a server
- * may dial.
+ * The blocked-network contract. This package holds the reference copy:
+ * `tests/Fixtures/contract/blocked-networks.json`. Other implementations of the contract fixture
+ * use it byte-identical and run every vector, so no implementation can disagree about what a
+ * server may dial.
  *
  * The URL vectors run with the contract policy (http + https, any port, no lists) and the
  * fixture's own DNS: a name it does not list does not resolve.
@@ -118,8 +117,8 @@ it('covers every verdict and the edges the plan asks for', function (): void {
         ->and($contract['redirects'])->toHaveCount(24);
 });
 
-it('holds only twin fixtures in the contract dir', function (): void {
-    // parity.sh fails on a file one side has and the other does not: nothing Laravel-only lives here.
+it('holds only the shared fixture in the contract dir', function (): void {
+    // Every file here is shared with other implementations of the contract: nothing Laravel-only.
     $files = array_values(array_diff(scandir(__DIR__.'/../Fixtures/contract') ?: [], ['.', '..']));
 
     expect($files)->toBe(['blocked-networks.json']);
