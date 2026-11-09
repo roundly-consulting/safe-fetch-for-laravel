@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\SafeFetch;
 
+use GuzzleHttp\Client;
+use GuzzleHttp\HandlerStack;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Psr\Http\Message\ResponseInterface;
+use RoundlyConsulting\SafeFetch\Actions\BuildHandlerStackAction;
+use RoundlyConsulting\SafeFetch\Actions\CreateGuzzleClientAction;
 use RoundlyConsulting\SafeFetch\Actions\DownloadUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\FetchUrlAction;
 use RoundlyConsulting\SafeFetch\Actions\GuardRequestAction;
@@ -24,6 +28,7 @@ use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
 use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
 use RoundlyConsulting\SafeFetch\Exceptions\SafeFetchException;
+use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\Handles\Networks;
 use RoundlyConsulting\SafeFetch\Handles\Urls;
 use RoundlyConsulting\SafeFetch\Support\SafeFetchConfig;
@@ -96,6 +101,35 @@ class SafeFetchManager
     public function guard(PendingRequest $request, ?DestinationPolicy $policy = null): PendingRequest
     {
         return $this->container->make(GuardRequestAction::class)->execute($request, $policy ?? $this->policy());
+    }
+
+    /**
+     * A Guzzle handler stack that guards every request sent through it, for a library that builds
+     * its own Guzzle client: `new Client(['handler' => SafeFetch::handlerStack()])`. Vetted, pinned
+     * and checked on every hop like `Http::safe()`; the client's own redirects are turned off (the
+     * policy follows them) and its cookie jar is applied per hop.
+     *
+     * @return HandlerStack<callable>
+     *
+     * @throws DestinationRejected (`cannot_pin`) without ext-curl
+     */
+    public function handlerStack(?DestinationPolicy $policy = null): HandlerStack
+    {
+        return $this->container->make(BuildHandlerStackAction::class)->execute($policy ?? $this->policy());
+    }
+
+    /**
+     * A Guzzle client (Guzzle's and PSR-18's) on the guarded stack, for a library that takes a
+     * ready client. `$config` is Guzzle's client config, without a `handler`.
+     *
+     * @param  array<string, mixed>  $config
+     *
+     * @throws DestinationRejected (`cannot_pin`) without ext-curl
+     * @throws UnsafeRequestOptions for a `handler` or Guzzle's own redirects in `$config`
+     */
+    public function guzzleClient(array $config = [], ?DestinationPolicy $policy = null): Client
+    {
+        return $this->container->make(CreateGuzzleClientAction::class)->execute($config, $policy ?? $this->policy());
     }
 
     /**

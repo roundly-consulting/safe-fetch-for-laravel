@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use GuzzleHttp\Client;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Support\Facades\Event;
@@ -27,7 +28,9 @@ use RoundlyConsulting\SafeFetch\Tests\Support\Helpers;
  * The technical docs' examples, run. Each block between `// docs: <page> #n` and `// end docs` is a
  * verbatim copy of the n-th php block of docs/packages/safe-fetch-for-laravel/technical/<page> —
  * keep them identical (an example that throws is a bug). `use` lines are hoisted to the imports;
- * blocks that show no call (the pinning option array, the event's shape) are not copied.
+ * blocks that show no call (the pinning option array, the event's shape) are not copied, nor are
+ * third-party-clients.md #2 and #3, which need laravel/mcp and laravel/ai (proved in a throwaway
+ * project; the package does not install them).
  */
 
 beforeEach(function (): void {
@@ -362,4 +365,31 @@ it('runs the consumer-packages testing example', function (): void {
     // end docs
 
     expect($pinned)->toBe('hooks.example.com:443:93.184.216.34');
+});
+
+it('runs the third-party-clients examples', function (): void {
+    SafeFetch::fakeDns(['api.partner.example' => '93.184.216.34', 'tenant.example' => '151.101.1.1']);
+    Http::fake(['api.partner.example/*' => Http::response('ok')]);
+    $tenantUrl = 'https://tenant.example/hook';
+
+    // docs: third-party-clients.md #0
+    $client = SafeFetch::guzzleClient(['base_uri' => 'https://api.partner.example/', 'timeout' => 10]);
+
+    $response = $client->get('v1/items');
+    $client->post('v1/hooks', ['json' => ['url' => $tenantUrl]]);
+    // end docs
+
+    expect((string) $response->getBody())->toBe('ok');
+
+    // docs: third-party-clients.md #1
+    $stack = SafeFetch::handlerStack(SafeFetch::policy()->allowHosts(['*.partner.example']));
+
+    $client = new Client(['handler' => $stack, 'base_uri' => 'https://api.partner.example/']);
+    // end docs
+
+    expect((string) $client->get('v1/items')->getBody())->toBe('ok')
+        ->and(fn () => $client->get('https://tenant.example/'))->toThrow(DestinationRejected::class);
+    Http::assertSentCount(3);
+    Http::assertSent(static fn (Request $request): bool => $request->url() === 'https://api.partner.example/v1/hooks'
+        && $request->data() === ['url' => $tenantUrl]);
 });

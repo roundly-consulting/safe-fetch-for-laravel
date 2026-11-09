@@ -72,6 +72,13 @@ final readonly class GuardMiddleware
             $this->refuseUnsafeOptions($options);
 
             $timeout = is_numeric($options['timeout'] ?? null) ? (float) $options['timeout'] : 0.0;
+            $limit = $this->policy->timeout;
+
+            // The policy's limit is a ceiling: a shorter timeout of the request's own wins.
+            if ($limit !== null && ($timeout <= 0 || $timeout > $limit)) {
+                $timeout = (float) $limit;
+            }
+
             $deadline = $timeout > 0 ? $this->clock->now() + $timeout : null;
 
             return $this->hop($handler, (string) $request->getUri(), $request, $options, 0, $deadline, null);

@@ -16,6 +16,8 @@ use RoundlyConsulting\SafeFetch\Testing\SafeFetchFake;
  * @method static bool allows(string $url, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static \Illuminate\Http\Client\PendingRequest http(\RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static \Illuminate\Http\Client\PendingRequest guard(\Illuminate\Http\Client\PendingRequest $request, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
+ * @method static \GuzzleHttp\HandlerStack<callable> handlerStack(\RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
+ * @method static \GuzzleHttp\Client guzzleClient(array<string, mixed> $config = [], \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static \RoundlyConsulting\SafeFetch\DataTransferObjects\FetchedResponse fetch(string $url, int|null $maxBytes = null, int|null $timeout = null, string|null $accept = null, array<string, string> $headers = [], bool|null $followRedirects = null, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static \RoundlyConsulting\SafeFetch\DataTransferObjects\DownloadedFile download(string $url, string $path, int|null $maxBytes = null, int|null $timeout = null, string|null $accept = null, array<string, string> $headers = [], bool|null $followRedirects = null, \RoundlyConsulting\SafeFetch\DataTransferObjects\DestinationPolicy|null $policy = null)
  * @method static bool truncated(\Illuminate\Http\Client\Response|\Psr\Http\Message\ResponseInterface $response)

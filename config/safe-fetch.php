@@ -78,6 +78,20 @@ return [
         'forward_headers' => [],
     ],
 
+    // Http::safe(), SafeFetch::http()/guard() and the guarded Guzzle stack
+    // (SafeFetch::handlerStack()/guzzleClient()). Off (null) by default.
+    'request' => [
+        // Cut every response body at this many bytes (at least 1): the response
+        // keeps its status and headers and gains Safe-Fetch-Truncated: 1. A
+        // request's own `sink` is then refused. null => no cap.
+        'max_bytes' => env('SAFE_FETCH_REQUEST_MAX_BYTES'),
+
+        // The most seconds a request may take, every hop included, 1–600. A
+        // shorter ->timeout() wins; a request without one gets this. null =>
+        // only the request's own (Laravel's 30 s; none on a Guzzle client).
+        'timeout' => env('SAFE_FETCH_REQUEST_TIMEOUT'),
+    ],
+
     'fetch' => [
         // SafeFetch::fetch() and download() body cap in bytes, at least 1.
         'max_bytes' => env('SAFE_FETCH_MAX_BYTES', 5_242_880),

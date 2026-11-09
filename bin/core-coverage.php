@@ -15,6 +15,9 @@ $core = [
     'src/Support/AddressRanges.php',
     'src/Http/GuardMiddleware.php',
     'src/Http/GuardedClient.php',
+    'src/Http/GuzzleClientOptions.php',
+    'src/Actions/BuildHandlerStackAction.php',
+    'src/Actions/CreateGuzzleClientAction.php',
     'src/Support/CappedTransfer.php',
 ];
 

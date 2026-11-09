@@ -254,9 +254,10 @@ it('policies are immutable and validated', function (): void {
     $loose = $base->allowHttp()->ports([443, 80, 443])->allowHosts(['a.example'])->allowHosts(['b.example'])
         ->blockHosts(['c.example'])->blockHosts(['d.example'])->trustPrivateHosts(['e.internal'])
         ->allowRanges(['10.0.0.0/8'])->allowRanges(['10.0.0.0/8', '192.168.1.1'])->blockRanges(['10.1.0.0/16'])
-        ->appHosts(['me.example'])->withoutAppHostBlock()->followRedirects(5)->maxResponseBytes(4096);
+        ->appHosts(['me.example'])->withoutAppHostBlock()->followRedirects(5)->maxResponseBytes(4096)->timeout(20);
 
     expect($base->schemes)->toBe(['https'])
+        ->and($base->timeout)->toBeNull()
         ->and($base->ports)->toBeNull()
         ->and($base->redirects->enabled)->toBeFalse()
         ->and($loose->schemes)->toBe(['http', 'https'])
@@ -275,6 +276,12 @@ it('policies are immutable and validated', function (): void {
         ->and($loose->redirects->statuses)->toBe([307, 308])
         ->and($loose->maxResponseBytes)->toBe(4096)
         ->and($loose->maxResponseBytes(null)->maxResponseBytes)->toBeNull()
+        ->and($loose->timeout)->toBe(20)
+        ->and($loose->timeout(null)->timeout)->toBeNull()
+        ->and($loose->timeout(null)->maxResponseBytes)->toBe(4096)
+        // Every wither keeps the time limit and the cap.
+        ->and($loose->httpsOnly()->ports([443])->maxResponseBytes(10)->blockHosts(['x.example'])->timeout)->toBe(20)
+        ->and($loose->timeout(5)->ports(null)->maxResponseBytes)->toBe(4096)
         ->and($loose->redirects(RedirectPolicy::none())->redirects->enabled)->toBeFalse();
 });
 
@@ -348,6 +355,7 @@ it('refuses a policy it could not apply as written', function (Closure $build, s
     'a prefix holding 6to4' => [fn () => (new DestinationPolicy)->allowRanges(['2000::/3']), 'switch the guard off'],
     'a prefix holding the mapped space' => [fn () => (new DestinationPolicy)->allowRanges(['::/64']), 'switch the guard off'],
     'cap' => [fn () => (new DestinationPolicy)->maxResponseBytes(0), 'at least 1 byte'],
+    'time limit' => [fn () => (new DestinationPolicy)->timeout(0), 'at least 1 second'],
     'redirect max' => [fn () => new RedirectPolicy(max: 11), 'between 0 and 10'],
     'redirect statuses' => [fn () => new RedirectPolicy(statuses: [302, 304]), 'one of 301'],
     'redirect no statuses' => [fn () => new RedirectPolicy(statuses: []), 'at least one'],

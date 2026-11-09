@@ -87,7 +87,8 @@ final readonly class CappedTransfer
             $redirects = $redirects->withStatuses(RedirectLocation::STATUSES);
         }
 
-        $policy = $policy->redirects($redirects)->maxResponseBytes(null);
+        // fetch() and download() have caps of their own: the policy's request caps do not apply.
+        $policy = $policy->redirects($redirects)->maxResponseBytes(null)->timeout(null);
         // Never written to: every hop the guard sends gets its own sink from `safe_fetch.before_hop`.
         $progress = new FetchProgress(CappedSink::open($maxBytes));
 

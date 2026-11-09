@@ -68,8 +68,9 @@ final readonly class DestinationPolicy
      * @param  list<string>  $allowedRanges  addresses / CIDRs exempt from the blocked-network table
      * @param  list<string>  $blockedRanges  addresses / CIDRs always refused
      * @param  list<string>  $appHosts  the app's own host names
-     * @param  int|null  $maxResponseBytes  `Http::safe()` only: cut a response body at this many bytes
+     * @param  int|null  $maxResponseBytes  `Http::safe()` and the guarded Guzzle stack only: cut a response body at this many bytes
      * @param  list<string>  $appAddresses  the app's own addresses (`app.url` written as one), refused like its host names
+     * @param  int|null  $timeout  `Http::safe()` and the guarded Guzzle stack only: the most seconds a request may take, every hop included
      *
      * @throws InvalidArgumentException for any value the guard could not apply as written
      */
@@ -86,6 +87,7 @@ final readonly class DestinationPolicy
         public RedirectPolicy $redirects = new RedirectPolicy,
         public ?int $maxResponseBytes = null,
         array $appAddresses = [],
+        public ?int $timeout = null,
     ) {
         $this->schemes = self::validSchemes($schemes);
         $this->ports = $ports === null ? null : self::validPorts($ports);
@@ -99,6 +101,10 @@ final readonly class DestinationPolicy
 
         if ($maxResponseBytes !== null && $maxResponseBytes < 1) {
             throw new InvalidArgumentException("A response cap must be at least 1 byte, [{$maxResponseBytes}] given.");
+        }
+
+        if ($timeout !== null && $timeout < 1) {
+            throw new InvalidArgumentException("A time limit must be at least 1 second, [{$timeout}] given.");
         }
     }
 
@@ -120,7 +126,7 @@ final readonly class DestinationPolicy
      */
     public function ports(?array $ports): self
     {
-        return new self($this->schemes, $ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses);
+        return new self($this->schemes, $ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses, $this->timeout);
     }
 
     /**
@@ -236,13 +242,24 @@ final readonly class DestinationPolicy
     }
 
     /**
-     * `Http::safe()` only: cut every response body at `$bytes` — the transfer stops there, the
+     * `Http::safe()` and the guarded Guzzle stack only: cut every response body at `$bytes` — the transfer stops there, the
      * response keeps its status and headers and gains `Safe-Fetch-Truncated: 1`. Null for no cap.
      * (`SafeFetch::fetch()` has its own `maxBytes`, which fails with `too_large` instead.)
      */
     public function maxResponseBytes(?int $bytes): self
     {
-        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $bytes, $this->appAddresses);
+        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $bytes, $this->appAddresses, $this->timeout);
+    }
+
+    /**
+     * `Http::safe()` and the guarded Guzzle stack only: the most `$seconds` a request may take,
+     * every hop included. A shorter timeout set on the request wins; a request with none
+     * (`timeout(0)`, a Guzzle client's default) gets this one. Null for no limit of the guard's own.
+     * (`SafeFetch::fetch()` has its own `timeout`.)
+     */
+    public function timeout(?int $seconds): self
+    {
+        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses, $seconds);
     }
 
     /**
@@ -278,6 +295,7 @@ final readonly class DestinationPolicy
             $redirects ?? $this->redirects,
             $this->maxResponseBytes,
             $this->appAddresses,
+            $this->timeout,
         );
     }
 

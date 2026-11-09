@@ -43,6 +43,8 @@ final class SafeFetchServiceProvider extends PackageServiceProvider
                     'Blocked ranges' => (string) count($policy->blockedRanges),
                     'App hosts' => $policy->blockAppHosts ? 'blocked' : 'not blocked',
                     'Redirects' => $redirects->enabled ? implode(', ', $redirects->statuses).' · max '.$redirects->max : 'off',
+                    'Request body cap' => $policy->maxResponseBytes === null ? 'none' : $policy->maxResponseBytes.' bytes',
+                    'Request time limit' => $policy->timeout === null ? 'none' : $policy->timeout.' s',
                     'DNS pinning' => CurlSupport::available() ? 'curl '.CurlSupport::curlVersion() : 'unavailable',
                 ];
             });

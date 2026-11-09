@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 
 ## Unreleased
 
+### Added
+
+- `SafeFetch::guzzleClient(array $config = [], ?DestinationPolicy $policy = null)` and
+  `SafeFetch::handlerStack(?DestinationPolicy $policy = null)`: guard a library's own Guzzle (or
+  PSR-18) client. Every request is vetted, pinned and checked on every hop like `Http::safe()`,
+  redirects follow the policy, the client's cookie jar applies per hop, and `Http::fake()` answers
+  and records the requests. `guzzleClient()` refuses a `handler` or Guzzle's own redirects in its
+  config. Behind them: `BuildHandlerStackAction` and `CreateGuzzleClientAction`.
+- `request.max_bytes` (`SAFE_FETCH_REQUEST_MAX_BYTES`) and `request.timeout`
+  (`SAFE_FETCH_REQUEST_TIMEOUT`): an optional body cap and time limit for every guarded request
+  (`Http::safe()`, `guard()`, `http()`, the guarded Guzzle stack). Both are off by default.
+- `DestinationPolicy::timeout(?int $seconds)`: a ceiling on a guarded request's time budget, every
+  hop included. A shorter timeout on the request wins, and a request with none gets the limit.
+  `fetch()` and `download()` keep their own `fetch.*` caps.
+- `php artisan about` shows the request body cap and time limit.
+
 ## 1.0.2 - 2026-11-08
 
 ### Changed

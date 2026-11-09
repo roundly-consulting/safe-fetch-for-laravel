@@ -33,8 +33,16 @@ final class SafeFetchConfig
             blockAppHosts: Config::boolean('safe-fetch.app_hosts.block', true),
             appHosts: [...self::appUrlHost(), ...Config::list('safe-fetch.app_hosts.extra', [], HostPattern::isValid(...))],
             redirects: self::redirects(),
+            maxResponseBytes: self::isSet(config('safe-fetch.request.max_bytes')) ? Config::integer('safe-fetch.request.max_bytes', 1, min: 1) : null,
             appAddresses: self::appUrlAddress(),
+            timeout: self::isSet(config('safe-fetch.request.timeout')) ? Config::integer('safe-fetch.request.timeout', 1, min: 1, max: 600) : null,
         );
+    }
+
+    /** Whether a setting that is off by default was given a value: blank means not set. */
+    private static function isSet(mixed $value): bool
+    {
+        return $value !== null && (! is_string($value) || trim($value) !== '');
     }
 
     public static function allowHttp(): bool
