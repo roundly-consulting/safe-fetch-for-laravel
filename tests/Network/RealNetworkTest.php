@@ -7,6 +7,7 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\Utils;
+use GuzzleHttp\TransferStats;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\File;
@@ -190,14 +191,21 @@ it('writes a followed answer into the callers own sink resource', function (int 
 })->with([307, 302]);
 
 it('streams through the pinned curl handler', function (): void {
-    $response = Http::safe(networkPolicy())->withOptions(['stream' => true])->get($this->server->url('pin.invalid', '/big'));
+    $connected = null;
+    $response = Http::safe(networkPolicy())->withOptions([
+        'stream' => true,
+        'on_stats' => static function (TransferStats $stats) use (&$connected): void {
+            $connected = $stats->getHandlerStat('primary_ip');
+        },
+    ])->get($this->server->url('pin.invalid', '/big'));
     $body = $response->toPsrResponse()->getBody();
 
-    // curl handlers ignore `stream`: the whole body is downloaded before the caller sees it — why
-    // maxResponseBytes exists.
+    // Handed out at its headers, the body read as it arrives (StreamingTest has the details); the
+    // transfer's stats come once it is read to its end.
     expect($response->status())->toBe(200)
-        ->and($response->handlerStats()['primary_ip'] ?? null)->toBe('127.0.0.1')
-        ->and($body->getSize())->toBe(2 * 1048576);
+        ->and($body->getSize())->toBeNull()
+        ->and(strlen((string) $body))->toBe(2 * 1048576)
+        ->and($connected)->toBe('127.0.0.1');
 });
 
 it('fetch caps a real body', function (): void {

@@ -29,6 +29,9 @@ use RoundlyConsulting\SafeFetch\Http\GuardMiddleware;
  * scheme, host and port (its `Host` header too), that the pin is intact, no proxy is set and
  * redirects are off; anything else is refused with `cannot_pin` and nothing is dialled.
  *
+ * A request with `stream => true` goes out as a {@see StreamedTransfer}: the same checks, the same
+ * curl, but its response returns once the final headers arrive and its body reads as it comes.
+ *
  * Under `Http::fake()` the stub answers first and this never runs.
  *
  * @internal
@@ -67,6 +70,10 @@ final class PinnedHandler
             return Create::rejectionFor(new LogicException(
                 'A guarded request reached the network under SafeFetch::fake(); answer it with Http::fake(), or call allowRealRequests().',
             ));
+        }
+
+        if (StreamedTransfer::wanted($options)) {
+            return StreamedTransfer::send($request, $options, $hop);
         }
 
         $this->curl ??= Proxy::wrapSync(new CurlMultiHandler, new CurlHandler);

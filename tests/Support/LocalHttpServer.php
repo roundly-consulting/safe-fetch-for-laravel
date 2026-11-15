@@ -78,7 +78,22 @@ final class LocalHttpServer
     {
         $lines = file($this->log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
 
-        return array_values(array_filter($lines, static fn (string $line): bool => ! str_starts_with($line, 'PROBE')));
+        return array_values(array_filter($lines, static fn (string $line): bool => ! str_starts_with($line, 'PROBE') && ! str_starts_with($line, 'EVENT')));
+    }
+
+    /**
+     * What the server's scripts reported about themselves (`EVENT …` lines, prefix dropped).
+     *
+     * @return list<string>
+     */
+    public function events(): array
+    {
+        $lines = file($this->log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+
+        return array_values(array_map(
+            static fn (string $line): string => substr($line, 6),
+            array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'EVENT ')),
+        ));
     }
 
     /** `http://<name>:<port><path>` for this server. */

@@ -45,6 +45,7 @@ final class SafeFetchServiceProvider extends PackageServiceProvider
                     'Redirects' => $redirects->enabled ? implode(', ', $redirects->statuses).' · max '.$redirects->max : 'off',
                     'Request body cap' => $policy->maxResponseBytes === null ? 'none' : $policy->maxResponseBytes.' bytes',
                     'Request time limit' => $policy->timeout === null ? 'none' : $policy->timeout.' s',
+                    'Stream read timeout' => $policy->readTimeout === null ? 'none' : $policy->readTimeout.' s',
                     'DNS pinning' => CurlSupport::available() ? 'curl '.CurlSupport::curlVersion() : 'unavailable',
                 ];
             });

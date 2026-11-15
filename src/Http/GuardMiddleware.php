@@ -20,14 +20,18 @@ use RoundlyConsulting\SafeFetch\Enums\Reason;
 use RoundlyConsulting\SafeFetch\Events\DestinationRefused;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationRejected;
 use RoundlyConsulting\SafeFetch\Exceptions\DestinationUnavailable;
+use RoundlyConsulting\SafeFetch\Exceptions\FetchFailed;
 use RoundlyConsulting\SafeFetch\Exceptions\UnsafeRequestOptions;
 use RoundlyConsulting\SafeFetch\SafeFetchManager;
 use RoundlyConsulting\SafeFetch\Support\CappedSink;
+use RoundlyConsulting\SafeFetch\Support\CappedStream;
 use RoundlyConsulting\SafeFetch\Support\Clock;
 use RoundlyConsulting\SafeFetch\Support\CurlOptions;
 use RoundlyConsulting\SafeFetch\Support\CurlSupport;
 use RoundlyConsulting\SafeFetch\Support\PreSendCheck;
 use RoundlyConsulting\SafeFetch\Support\RedirectLocation;
+use RoundlyConsulting\SafeFetch\Support\StreamedBody;
+use RoundlyConsulting\SafeFetch\Support\StreamedTransfer;
 use RuntimeException;
 use Throwable;
 
@@ -37,6 +41,10 @@ use Throwable;
  * off any proxy, checked against the address curl actually connected to — before a byte is sent
  * where curl can, and from the transfer stats afterwards — and redirects are followed by hand under
  * the policy, each hop vetted and pinned again.
+ *
+ * With `stream => true` (and the pre-send check to back it) a hop's answer comes back at its
+ * headers and its body reads as it arrives ({@see StreamedTransfer}); the byte cap then fails the
+ * read past it instead of cutting the body, and the policy's `readTimeout` ends a silent stream.
  *
  * It never wraps, swallows or reorders a throwable from code inside it: a refusal of its own is a
  * {@see DestinationRejected}/{@see DestinationUnavailable}; anything else reaches the caller as thrown.
@@ -204,7 +212,8 @@ final readonly class GuardMiddleware
         }
 
         $check = CurlSupport::preSendCheck() ? new PreSendCheck($vetted) : null;
-        $sink = $this->policy->maxResponseBytes === null ? null : CappedSink::open($this->policy->maxResponseBytes);
+        $streamed = StreamedTransfer::wanted($options);
+        $sink = $this->policy->maxResponseBytes === null || $streamed ? null : CappedSink::open($this->policy->maxResponseBytes);
         $stats = null;
         $redirect = null;
         $head = null;
@@ -242,6 +251,11 @@ final readonly class GuardMiddleware
 
         if ($sink !== null) {
             $hopOptions['sink'] = $sink->resource;
+        }
+
+        if ($streamed) {
+            $hopOptions[StreamedTransfer::MAX_BYTES] = $this->policy->maxResponseBytes;
+            $hopOptions['read_timeout'] = $this->readTimeout($options);
         }
 
         $callerStats = $options['on_stats'] ?? null;
@@ -285,7 +299,7 @@ final readonly class GuardMiddleware
         }
 
         return $handler($request, $hopOptions)->then(
-            function (ResponseInterface $response) use (&$stats, $handler, $request, $options, $n, $deadline, $firstOrigin, $vetted, $sink, $jar): PromiseInterface {
+            function (ResponseInterface $response) use (&$stats, $handler, $request, $options, $n, $deadline, $firstOrigin, $vetted, $sink, $jar, $streamed): PromiseInterface {
                 if ($stats instanceof TransferStats && ! self::stubbed($stats) && ! self::connectedInside($stats, $vetted)) {
                     $response->getBody()->close();
 
@@ -300,7 +314,7 @@ final readonly class GuardMiddleware
                     return $this->follow($handler, $response, $request, $options, $n, $deadline, $firstOrigin, $vetted);
                 }
 
-                return Create::promiseFor($this->capped($response, $sink));
+                return $streamed ? $this->streamedWithinCap($response, $vetted) : Create::promiseFor($this->capped($response, $sink));
             },
             function (mixed $reason) use (&$stats, &$redirect, &$head, $check, $handler, $request, $options, $n, $deadline, $firstOrigin, $vetted, $sink, $jar): PromiseInterface {
                 if ($check?->refused === true || ($stats instanceof TransferStats && self::connectedOutside($stats, $vetted))) {
@@ -450,6 +464,45 @@ final readonly class GuardMiddleware
         $address = $stats->getHandlerStat('primary_ip');
 
         return is_string($address) && $address !== '' && ! $vetted->connectsTo($address);
+    }
+
+    /**
+     * The idle limit of a streamed hop: the policy's `readTimeout` or the request's own
+     * `read_timeout`, whichever is shorter; 0 for none.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    private function readTimeout(array $options): float
+    {
+        $own = is_numeric($options['read_timeout'] ?? null) ? (float) $options['read_timeout'] : 0.0;
+        $limit = $this->policy->readTimeout;
+
+        return $limit !== null && ($own <= 0 || $own > $limit) ? (float) $limit : max(0.0, $own);
+    }
+
+    /**
+     * A streamed answer under `maxResponseBytes`: one that declares a longer body fails before it
+     * is read; any other is read through the cap — a transfer's by curl, a stub's here.
+     */
+    private function streamedWithinCap(ResponseInterface $response, VettedDestination $vetted): PromiseInterface
+    {
+        $max = $this->policy->maxResponseBytes;
+
+        if ($max === null) {
+            return Create::promiseFor($response);
+        }
+
+        $declared = $response->getHeaderLine('Content-Length');
+
+        if (ctype_digit($declared) && (int) $declared > $max) {
+            $response->getBody()->close();
+
+            return Create::rejectionFor(FetchFailed::because(Reason::TooLarge, $vetted->url, $vetted->host));
+        }
+
+        $body = $response->getBody();
+
+        return Create::promiseFor($body instanceof StreamedBody ? $response : $response->withBody(new CappedStream($body, $max, $vetted)));
     }
 
     /** A response whose body passed `maxResponseBytes`, cut there and marked. */

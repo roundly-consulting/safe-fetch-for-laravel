@@ -50,6 +50,8 @@ it('reads every setting strictly', function (string $key, mixed $value, Closure 
     'request.timeout zero' => ['request.timeout', 0, fn () => SafeFetch::policy(), 'must be between 1 and 600'],
     'request.timeout too long' => ['request.timeout', 601, fn () => SafeFetch::policy(), 'must be between 1 and 600'],
     'request.timeout word' => ['request.timeout', 'off', fn () => SafeFetch::policy(), 'must be an integer'],
+    'request.read_timeout zero' => ['request.read_timeout', 0, fn () => SafeFetch::policy(), 'must be between 1 and 600'],
+    'request.read_timeout too long' => ['request.read_timeout', 601, fn () => SafeFetch::policy(), 'must be between 1 and 600'],
     'resolver not a resolver' => ['resolver', stdClass::class, fn () => app(HostResolver::class), 'must be a class-string'],
     'resolver missing class' => ['resolver', 'App\\Nope', fn () => app(HostResolver::class), 'must be a class-string'],
 ]);
@@ -69,6 +71,7 @@ it('reads every setting from env strings and uses the default when blank', funct
     config()->set('safe-fetch.resolver', '');
     config()->set('safe-fetch.request.max_bytes', '65536');
     config()->set('safe-fetch.request.timeout', '15');
+    config()->set('safe-fetch.request.read_timeout', '5');
 
     $policy = SafeFetch::policy();
 
@@ -85,13 +88,16 @@ it('reads every setting from env strings and uses the default when blank', funct
         ->and(SafeFetchConfig::fetchTimeout())->toBe(30)
         ->and($policy->maxResponseBytes)->toBe(65536)
         ->and($policy->timeout)->toBe(15)
+        ->and($policy->readTimeout)->toBe(5)
         ->and(app(HostResolver::class))->toBeInstanceOf(SystemHostResolver::class);
 
     config()->set('safe-fetch.request.max_bytes', ' ');
     config()->set('safe-fetch.request.timeout', null);
+    config()->set('safe-fetch.request.read_timeout', '');
 
     expect(SafeFetch::policy()->maxResponseBytes)->toBeNull()
-        ->and(SafeFetch::policy()->timeout)->toBeNull();
+        ->and(SafeFetch::policy()->timeout)->toBeNull()
+        ->and(SafeFetch::policy()->readTimeout)->toBeNull();
 });
 
 it('ships the defaults it documents', function (): void {
@@ -107,7 +113,8 @@ it('ships the defaults it documents', function (): void {
         ->and($policy->redirects->statusesGiven)->toBeFalse()
         ->and($policy->maxResponseBytes)->toBeNull()
         ->and($policy->timeout)->toBeNull()
-        ->and(config('safe-fetch.request'))->toBe(['max_bytes' => null, 'timeout' => null])
+        ->and($policy->readTimeout)->toBeNull()
+        ->and(config('safe-fetch.request'))->toBe(['max_bytes' => null, 'timeout' => null, 'read_timeout' => null])
         ->and(app(HostResolver::class))->toBeInstanceOf(SystemHostResolver::class);
 });
 

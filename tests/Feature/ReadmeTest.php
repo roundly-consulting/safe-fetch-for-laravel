@@ -59,5 +59,7 @@ it('keeps the readme slim and true', function (): void {
         ->and($readme)->toContain('composer require roundly-consulting/safe-fetch-for-laravel')
         ->and($readme)->toContain('new SafeUrl')
         ->and($readme)->toContain('SafeFetch::fetch($request->input(\'feed\'), maxBytes: 2_000_000)')
-        ->and($readme)->toContain('Http::safe()->withToken($token)->post($hookUrl, $payload)');
+        ->and($readme)->toContain('Http::safe()->withToken($token)->post($hookUrl, $payload)')
+        ->and($readme)->toContain("Http::withOptions(['stream' => true])")
+        ->and($readme)->toContain('->safe(SafeFetch::policy()->readTimeout(30))');
 });

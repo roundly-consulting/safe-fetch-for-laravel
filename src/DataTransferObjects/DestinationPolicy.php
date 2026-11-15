@@ -71,6 +71,7 @@ final readonly class DestinationPolicy
      * @param  int|null  $maxResponseBytes  `Http::safe()` and the guarded Guzzle stack only: cut a response body at this many bytes
      * @param  list<string>  $appAddresses  the app's own addresses (`app.url` written as one), refused like its host names
      * @param  int|null  $timeout  `Http::safe()` and the guarded Guzzle stack only: the most seconds a request may take, every hop included
+     * @param  int|null  $readTimeout  streamed responses (`stream => true`) only: the most seconds the server may send nothing
      *
      * @throws InvalidArgumentException for any value the guard could not apply as written
      */
@@ -88,6 +89,7 @@ final readonly class DestinationPolicy
         public ?int $maxResponseBytes = null,
         array $appAddresses = [],
         public ?int $timeout = null,
+        public ?int $readTimeout = null,
     ) {
         $this->schemes = self::validSchemes($schemes);
         $this->ports = $ports === null ? null : self::validPorts($ports);
@@ -105,6 +107,10 @@ final readonly class DestinationPolicy
 
         if ($timeout !== null && $timeout < 1) {
             throw new InvalidArgumentException("A time limit must be at least 1 second, [{$timeout}] given.");
+        }
+
+        if ($readTimeout !== null && $readTimeout < 1) {
+            throw new InvalidArgumentException("A read timeout must be at least 1 second, [{$readTimeout}] given.");
         }
     }
 
@@ -126,7 +132,7 @@ final readonly class DestinationPolicy
      */
     public function ports(?array $ports): self
     {
-        return new self($this->schemes, $ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses, $this->timeout);
+        return new self($this->schemes, $ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses, $this->timeout, $this->readTimeout);
     }
 
     /**
@@ -244,11 +250,13 @@ final readonly class DestinationPolicy
     /**
      * `Http::safe()` and the guarded Guzzle stack only: cut every response body at `$bytes` — the transfer stops there, the
      * response keeps its status and headers and gains `Safe-Fetch-Truncated: 1`. Null for no cap.
+     * A streamed response (`stream => true`) is not cut but fails: a declared `Content-Length` over
+     * the cap before its body, any other once reading passes the cap (`FetchFailed`, `too_large`).
      * (`SafeFetch::fetch()` has its own `maxBytes`, which fails with `too_large` instead.)
      */
     public function maxResponseBytes(?int $bytes): self
     {
-        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $bytes, $this->appAddresses, $this->timeout);
+        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $bytes, $this->appAddresses, $this->timeout, $this->readTimeout);
     }
 
     /**
@@ -259,7 +267,18 @@ final readonly class DestinationPolicy
      */
     public function timeout(?int $seconds): self
     {
-        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses, $seconds);
+        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses, $seconds, $this->readTimeout);
+    }
+
+    /**
+     * Streamed responses (`stream => true`) only: end a stream whose server sends nothing for
+     * `$seconds` — while waiting for its headers or between two pieces of its body — with a
+     * `FetchFailed` (`timeout`). The total {@see self::timeout()} still applies on top. A request's
+     * own shorter `read_timeout` wins. Null for no idle limit of the guard's own.
+     */
+    public function readTimeout(?int $seconds): self
+    {
+        return new self($this->schemes, $this->ports, $this->allowedHosts, $this->blockedHosts, $this->privateHosts, $this->allowedRanges, $this->blockedRanges, $this->blockAppHosts, $this->appHosts, $this->redirects, $this->maxResponseBytes, $this->appAddresses, $this->timeout, $seconds);
     }
 
     /**
@@ -296,6 +315,7 @@ final readonly class DestinationPolicy
             $this->maxResponseBytes,
             $this->appAddresses,
             $this->timeout,
+            $this->readTimeout,
         );
     }
 

@@ -112,6 +112,43 @@ if ($path === '/gzip-bomb') {
     return;
 }
 
+if ($path === '/sse') {
+    // Server-sent events: `chunks` events, `delay` ms apart (`pause` ms after the first), each
+    // flushed on its own. How far it got is logged as an EVENT line when the script ends.
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+
+    // Whatever output buffering php.ini set up would hold the events back.
+    while (ob_get_level() > 0) {
+        ob_end_flush();
+    }
+
+    $chunks = (int) ($_GET['chunks'] ?? 5);
+    $delay = (int) ($_GET['delay'] ?? 200);
+    $pause = (int) ($_GET['pause'] ?? $delay);
+    $sent = 0;
+
+    register_shutdown_function(static function () use (&$sent, $chunks): void {
+        file_put_contents(
+            (string) getenv('SAFE_FETCH_SERVER_LOG'),
+            'EVENT sse sent='.$sent.' of='.$chunks.' aborted='.(connection_aborted() ? 1 : 0)."\n",
+            FILE_APPEND | LOCK_EX,
+        );
+    });
+
+    for ($i = 1; $i <= $chunks; $i++) {
+        echo "data: {$i}\n\n";
+        flush();
+        $sent = $i;
+
+        if ($i < $chunks) {
+            usleep(1000 * ($i === 1 ? $pause : $delay));
+        }
+    }
+
+    return;
+}
+
 if ($path === '/unavailable') {
     header('Retry-After: 7');
     http_response_code(503);

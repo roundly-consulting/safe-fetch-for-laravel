@@ -36,6 +36,7 @@ final class SafeFetchConfig
             maxResponseBytes: self::isSet(config('safe-fetch.request.max_bytes')) ? Config::integer('safe-fetch.request.max_bytes', 1, min: 1) : null,
             appAddresses: self::appUrlAddress(),
             timeout: self::isSet(config('safe-fetch.request.timeout')) ? Config::integer('safe-fetch.request.timeout', 1, min: 1, max: 600) : null,
+            readTimeout: self::isSet(config('safe-fetch.request.read_timeout')) ? Config::integer('safe-fetch.request.read_timeout', 1, min: 1, max: 600) : null,
         );
     }
 

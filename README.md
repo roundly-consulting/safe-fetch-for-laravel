@@ -60,6 +60,22 @@ Or guard any Laravel HTTP call:
 Http::safe()->withToken($token)->post($hookUrl, $payload);
 ```
 
+### Streaming responses
+
+With `stream => true` the response comes back at its headers and the body reads as the server
+sends it (server-sent events, an LLM's token stream), every guard still on:
+
+```php
+$body = Http::withOptions(['stream' => true])
+    ->safe(SafeFetch::policy()->readTimeout(30)) // end a stream silent for 30 s
+    ->post($llmUrl, $payload)
+    ->toPsrResponse()->getBody();
+
+while (! $body->eof()) {
+    echo $body->read(1024);
+}
+```
+
 <!-- roundly-docs:start -->
 ## Documentation
 

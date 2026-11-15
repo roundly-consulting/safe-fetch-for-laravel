@@ -254,7 +254,7 @@ it('policies are immutable and validated', function (): void {
     $loose = $base->allowHttp()->ports([443, 80, 443])->allowHosts(['a.example'])->allowHosts(['b.example'])
         ->blockHosts(['c.example'])->blockHosts(['d.example'])->trustPrivateHosts(['e.internal'])
         ->allowRanges(['10.0.0.0/8'])->allowRanges(['10.0.0.0/8', '192.168.1.1'])->blockRanges(['10.1.0.0/16'])
-        ->appHosts(['me.example'])->withoutAppHostBlock()->followRedirects(5)->maxResponseBytes(4096)->timeout(20);
+        ->appHosts(['me.example'])->withoutAppHostBlock()->followRedirects(5)->maxResponseBytes(4096)->timeout(20)->readTimeout(7);
 
     expect($base->schemes)->toBe(['https'])
         ->and($base->timeout)->toBeNull()
@@ -282,7 +282,14 @@ it('policies are immutable and validated', function (): void {
         // Every wither keeps the time limit and the cap.
         ->and($loose->httpsOnly()->ports([443])->maxResponseBytes(10)->blockHosts(['x.example'])->timeout)->toBe(20)
         ->and($loose->timeout(5)->ports(null)->maxResponseBytes)->toBe(4096)
-        ->and($loose->redirects(RedirectPolicy::none())->redirects->enabled)->toBeFalse();
+        ->and($loose->redirects(RedirectPolicy::none())->redirects->enabled)->toBeFalse()
+        ->and($base->readTimeout)->toBeNull()
+        ->and($loose->readTimeout)->toBe(7)
+        ->and($loose->readTimeout(null)->readTimeout)->toBeNull()
+        ->and($loose->readTimeout(null)->timeout)->toBe(20)
+        // Every wither keeps the read timeout.
+        ->and($loose->httpsOnly()->ports([443])->maxResponseBytes(10)->timeout(3)->blockHosts(['x.example'])->readTimeout)->toBe(7)
+        ->and(fn () => $base->readTimeout(0))->toThrow(InvalidArgumentException::class, 'A read timeout must be at least 1 second, [0] given.');
 });
 
 it('allows a carried ipv4 range only as wide as it carries', function (): void {

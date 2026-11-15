@@ -90,6 +90,11 @@ return [
         // shorter ->timeout() wins; a request without one gets this. null =>
         // only the request's own (Laravel's 30 s; none on a Guzzle client).
         'timeout' => env('SAFE_FETCH_REQUEST_TIMEOUT'),
+
+        // Streamed responses (`stream => true`) only: the most seconds the server
+        // may send nothing, 1–600. A shorter `read_timeout` of the request's own
+        // wins. null => only the request's own.
+        'read_timeout' => env('SAFE_FETCH_REQUEST_READ_TIMEOUT'),
     ],
 
     'fetch' => [
