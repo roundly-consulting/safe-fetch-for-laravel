@@ -94,7 +94,7 @@ it('hands out the first event before the server has finished', function (Closure
         ->and($this->server->requests())->toHaveCount(1);
 })->with(streamSenders());
 
-it('runs the readme streaming example', function (): void {
+it('streams a post body to a caller reading it in a loop', function (): void {
     config()->set('safe-fetch.allow_http', true);
     config()->set('safe-fetch.ranges.allowed', ['127.0.0.1/32']);
     $llmUrl = $this->server->url('pin.invalid', '/sse?chunks=3&delay=50');
