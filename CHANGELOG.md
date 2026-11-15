@@ -4,6 +4,38 @@ All notable changes to `safe-fetch-for-laravel` are documented in this file. The
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## 1.2.0 - 2026-11-15
+
+### Added
+
+- Streamed responses. A guarded request sent with `stream => true` (`Http::withOptions(['stream' =>
+  true])->safe()`, `SafeFetch::handlerStack()`, `SafeFetch::guzzleClient()`) returns as soon as the
+  final hop's headers arrive. Its body is read as the server sends it, for server-sent events or an
+  LLM's token stream. Every guard still applies: each hop is vetted, pinned and checked before
+  dialling, redirects are followed and vetted per hop with only the final hop streamed, and the
+  policy's port, scheme and range rules and its time limit hold. The caller's `progress`,
+  `on_headers`, `on_stats` and `read_timeout` pass through. Closing the body, or letting go of it,
+  stops the transfer and frees its curl handles.
+- `DestinationPolicy::readTimeout(?int $seconds)` and `request.read_timeout`
+  (`SAFE_FETCH_REQUEST_READ_TIMEOUT`): an idle limit for streamed responses. A stream that sends
+  nothing for that long, before its headers or between two pieces of its body, fails with
+  `FetchFailed` (`timeout`). A request's shorter `read_timeout` wins. Off by default.
+- `php artisan about` shows the stream read timeout.
+
+### Changed
+
+- `stream => true` on a guarded request used to be ignored: the whole body was downloaded first. It
+  now streams wherever the pre-send check runs (libcurl 7.80+, any Guzzle except 7.12.x). Without
+  the check the request is still received whole and checked afterwards, as before.
+- In stream mode, `maxResponseBytes` fails instead of truncating. A declared `Content-Length` over
+  the cap fails before the body is read. Any other body fails on the read that passes the cap, after
+  the bytes up to it (`FetchFailed`, `too_large`). `Http::fake()` stubs read through the same cap.
+  Without `stream`, nothing changes.
+- A read that breaks off mid-stream throws a typed `FetchFailed` (`timeout`, `connection`, `tls`,
+  …). An exception from one of the caller's own callbacks is rethrown as it was thrown.
+- The transfer's stats (`on_stats`, Laravel's `handlerStats()`) arrive once the body has been read
+  to its end, not with the response.
+
 ## 1.1.0 - 2026-11-09
 
 ### Added
